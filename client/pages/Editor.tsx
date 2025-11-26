@@ -1,13 +1,13 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { 
   Save, Layout, Type, Image as ImageIcon, Link as LinkIcon, 
-  Quote, List, Bold, Italic, Check, Eye, X, Settings, 
-  ChevronDown, ChevronUp, HelpCircle, FileText, Upload
+  Quote, Bold, Italic, Check, Eye, X, Settings, 
+  ChevronDown, ChevronUp, Upload, Plus, ExternalLink, Minus, Heading, EyeOff, Bell
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { Article, ArticleCategory } from '../types';
+import { WikitextRenderer } from '../components/WikitextRenderer';
 
 export const Editor: React.FC = () => {
   const { slug } = useParams();
@@ -27,8 +27,12 @@ export const Editor: React.FC = () => {
   // UI State
   const [summary, setSummary] = useState('');
   const [isMinorEdit, setIsMinorEdit] = useState(false);
+  const [isWatching, setIsWatching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showSettings, setShowSettings] = useState(!slug); // Default open if new
+  const [showSettings, setShowSettings] = useState(!slug); 
+  const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState<'formatting' | 'inserts' | 'tools'>('formatting');
+  const [notification, setNotification] = useState<string | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,6 +57,13 @@ export const Editor: React.FC = () => {
       setUrlSlug(title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
     }
   }, [title, slug]);
+
+  const toggleWatch = () => {
+    const newState = !isWatching;
+    setIsWatching(newState);
+    setNotification(newState ? "Added to your watchlist." : "Removed from your watchlist.");
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   // --- Text Insertion Helpers ---
   const insertAtCursor = (before: string, after: string = '', defaultText: string = '') => {
@@ -102,9 +113,16 @@ export const Editor: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)] animate-fade-in max-w-6xl mx-auto w-full">
+    <div className="flex flex-col h-[calc(100vh-100px)] animate-fade-in max-w-6xl mx-auto w-full relative">
        
-       {/* 1. Top Header (Like MediaWiki 'Editing Page') */}
+       {/* Notification Toast */}
+       {notification && (
+           <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-4 z-50 px-6 py-3 bg-wom-primary text-white rounded-full shadow-lg font-bold text-sm animate-fade-in flex items-center gap-2">
+               <Check size={16} /> {notification}
+           </div>
+       )}
+
+       {/* 1. Top Header */}
        <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-wom-primary/30 pb-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -125,7 +143,7 @@ export const Editor: React.FC = () => {
           </button>
        </div>
 
-       {/* 2. Collapsible Settings Panel (Advanced Options) */}
+       {/* 2. Collapsible Settings Panel */}
        {showSettings && (
           <div className="bg-wom-panel border border-white/10 p-6 rounded-xl mb-6 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-xl relative overflow-hidden">
              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-wom-primary to-wom-accent"></div>
@@ -191,88 +209,142 @@ export const Editor: React.FC = () => {
           </div>
        )}
 
-       {/* 3. Editor Container (Toolbar + Textarea) */}
-       <div className="flex-1 flex flex-col min-h-0 bg-black/20 border border-white/10 rounded-t-xl overflow-hidden shadow-2xl">
+       {/* 3. Editor Container (Toolbar + Textarea/Preview) */}
+       <div className="flex-1 flex flex-col min-h-0 bg-black/20 border border-white/10 rounded-t-xl overflow-hidden shadow-2xl relative">
           
-          {/* Toolbar */}
-          <div className="bg-[#1a1a1a] border-b border-white/10 p-2 flex flex-wrap items-center gap-1 select-none">
-             {/* Text Formatting */}
-             <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-1">
-                <button onClick={() => insertAtCursor("'''", "'''", "Bold Text")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="Bold">
-                   <Bold size={18} />
+          {/* Toolbar Tabs - Hide in preview mode */}
+          {!showPreview && (
+          <div className="bg-[#1a1a1a] border-b border-white/10 select-none">
+             {/* Tabs Header */}
+             <div className="flex border-b border-white/5">
+                <button 
+                  onClick={() => setActiveTab('formatting')}
+                  className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${activeTab === 'formatting' ? 'bg-white/5 text-wom-primary border-b-2 border-wom-primary' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                >
+                   <Type size={16} /> <span className="hidden sm:inline">Formatting</span>
                 </button>
-                <button onClick={() => insertAtCursor("''", "''", "Italic Text")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="Italic">
-                   <Italic size={18} />
+                <button 
+                  onClick={() => setActiveTab('inserts')}
+                  className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${activeTab === 'inserts' ? 'bg-white/5 text-wom-primary border-b-2 border-wom-primary' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                >
+                   <Plus size={16} /> <span className="hidden sm:inline">Inserts</span>
                 </button>
-                <button onClick={() => insertAtCursor("==", "==", "Heading 2")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded font-serif font-bold" title="Heading 2">
-                   H2
-                </button>
-             </div>
-
-             {/* Insert Objects */}
-             <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-1">
-                <button onClick={() => insertAtCursor("[[", "]]", "Link Title")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="Internal Link">
-                   <LinkIcon size={18} />
-                </button>
-                <button onClick={() => insertAtCursor("[", "]", "http://example.com Link Title")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="External Link">
-                   <ExternalLink size={18} />
-                </button>
-                <button onClick={() => insertAtCursor("[[File:", "]]", "Filename.jpg")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="Image / File">
-                   <ImageIcon size={18} />
-                </button>
-                <button onClick={() => insertAtCursor("{{Quote|", "|Author|Source}}", "Text")} className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded" title="Quote">
-                   <Quote size={18} />
+                <button 
+                  onClick={() => setActiveTab('tools')}
+                  className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${activeTab === 'tools' ? 'bg-white/5 text-wom-primary border-b-2 border-wom-primary' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                >
+                   <Layout size={16} /> <span className="hidden sm:inline">Tools</span>
                 </button>
              </div>
 
-             {/* Tools */}
-             <div className="flex items-center gap-1 flex-1">
-                 <Link to="/media" target="_blank" className="p-1.5 text-wom-primary hover:text-white hover:bg-wom-primary/20 rounded flex items-center gap-2 text-sm font-bold" title="Upload Media">
-                    <Upload size={16} /> <span className="hidden sm:inline">Media Bank</span>
-                 </Link>
-                 
-                 <div className="relative ml-auto">
-                    <button 
-                       onClick={() => setShowTemplates(!showTemplates)}
-                       className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-bold ${showTemplates ? 'bg-wom-primary text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'}`}
-                    >
-                       <Layout size={16} /> Insert Template <ChevronDown size={14} />
-                    </button>
-                    
-                    {showTemplates && (
-                       <div className="absolute right-0 top-full mt-2 w-72 bg-wom-panel border border-wom-primary/30 rounded-lg shadow-2xl z-50 max-h-80 overflow-y-auto custom-scrollbar">
-                          <div className="p-2 text-xs font-bold text-gray-500 uppercase">Available Templates</div>
-                          {templates.map((t, i) => (
-                             <button 
-                                key={i}
-                                onClick={() => {
-                                   insertAtCursor(t.content);
-                                   setShowTemplates(false);
-                                }}
-                                className="w-full text-left px-4 py-3 border-b border-white/5 hover:bg-wom-primary/10 transition-colors group"
-                             >
-                                <div className="text-sm font-bold text-white group-hover:text-wom-accent">{t.name}</div>
-                                <div className="text-xs text-gray-500 truncate">{t.description}</div>
-                             </button>
-                          ))}
-                       </div>
-                    )}
-                 </div>
+             {/* Tab Content */}
+             <div className="p-3 bg-black/20 min-h-[56px] flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                {/* Formatting Tab */}
+                {activeTab === 'formatting' && (
+                   <>
+                      <button onClick={() => insertAtCursor("'''", "'''", "Bold Text")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Bold">
+                         <Bold size={18} />
+                      </button>
+                      <button onClick={() => insertAtCursor("''", "''", "Italic Text")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Italic">
+                         <Italic size={18} />
+                      </button>
+                      <div className="w-px h-6 bg-white/10 mx-2"></div>
+                      <button onClick={() => insertAtCursor("==", "==", "Heading 2")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors font-serif font-bold flex items-center gap-1" title="Heading 2">
+                         <Heading size={18} /> <span className="text-xs">H2</span>
+                      </button>
+                      <button onClick={() => insertAtCursor("===", "===", "Heading 3")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors font-serif font-bold flex items-center gap-1" title="Heading 3">
+                         <Heading size={16} /> <span className="text-xs">H3</span>
+                      </button>
+                      <div className="w-px h-6 bg-white/10 mx-2"></div>
+                      <button onClick={() => insertAtCursor("----", "", "")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Horizontal Rule">
+                         <Minus size={18} />
+                      </button>
+                   </>
+                )}
+
+                {/* Inserts Tab */}
+                {activeTab === 'inserts' && (
+                   <>
+                      <button onClick={() => insertAtCursor("[[", "]]", "Link Title")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Internal Link">
+                         <LinkIcon size={18} />
+                      </button>
+                      <button onClick={() => insertAtCursor("[", "]", "http://example.com Link Title")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="External Link">
+                         <ExternalLink size={18} />
+                      </button>
+                      <div className="w-px h-6 bg-white/10 mx-2"></div>
+                      <button onClick={() => insertAtCursor("[[File:", "]]", "Filename.jpg")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Image / File">
+                         <ImageIcon size={18} />
+                      </button>
+                      <button onClick={() => insertAtCursor("{{Quote|", "|Author|Source}}", "Text")} className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors" title="Quote">
+                         <Quote size={18} />
+                      </button>
+                   </>
+                )}
+
+                {/* Tools Tab */}
+                {activeTab === 'tools' && (
+                   <>
+                      <Link to="/media" target="_blank" className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded flex items-center gap-2 text-xs font-bold transition-colors">
+                         <Upload size={14} /> Media Bank
+                      </Link>
+                      <div className="w-px h-6 bg-white/10 mx-2"></div>
+                      
+                      <div className="relative">
+                         <button 
+                            onClick={() => setShowTemplates(!showTemplates)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-colors ${showTemplates ? 'bg-wom-primary text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
+                         >
+                            <Layout size={14} /> Insert Template <ChevronDown size={12} />
+                         </button>
+                         
+                         {showTemplates && (
+                            <div className="absolute left-0 top-full mt-2 w-72 bg-wom-panel border border-wom-primary/30 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+                               <div className="sticky top-0 bg-wom-panel p-2 text-xs font-bold text-gray-500 uppercase border-b border-white/5">Available Templates</div>
+                               {templates.map((t, i) => (
+                                  <button 
+                                     key={i}
+                                     onClick={() => {
+                                        insertAtCursor(t.content);
+                                        setShowTemplates(false);
+                                     }}
+                                     className="w-full text-left px-4 py-3 border-b border-white/5 hover:bg-wom-primary/10 transition-colors group"
+                                  >
+                                     <div className="text-sm font-bold text-white group-hover:text-wom-accent">{t.name}</div>
+                                     <div className="text-xs text-gray-500 truncate">{t.description}</div>
+                                  </button>
+                               ))}
+                            </div>
+                         )}
+                      </div>
+                   </>
+                )}
              </div>
           </div>
+          )}
 
-          {/* Textarea */}
-          <textarea 
-             ref={textareaRef}
-             className="flex-1 w-full bg-[#0a0a0a] text-gray-200 font-mono text-sm leading-relaxed p-4 resize-none focus:outline-none focus:ring-0 custom-scrollbar"
-             placeholder="Start typing your wikicode here..."
-             value={content}
-             onChange={e => setContent(e.target.value)}
-             spellCheck={false}
-          />
+          {/* Textarea or Preview */}
+          {showPreview ? (
+              <div className="flex-1 w-full bg-[#0a0a0a] p-8 overflow-y-auto custom-scrollbar">
+                  <div className="max-w-4xl mx-auto">
+                      <h2 className="text-3xl font-display font-bold text-white mb-6 border-b border-wom-primary/30 pb-4">
+                          Preview: {title}
+                      </h2>
+                      <WikitextRenderer content={content} />
+                  </div>
+              </div>
+          ) : (
+              <textarea 
+                 ref={textareaRef}
+                 className="flex-1 w-full bg-[#0a0a0a] text-gray-200 font-mono text-sm leading-relaxed p-4 resize-none focus:outline-none focus:ring-0 custom-scrollbar"
+                 placeholder="Start typing your wikicode here..."
+                 value={content}
+                 onChange={e => setContent(e.target.value)}
+                 spellCheck={false}
+              />
+          )}
        </div>
 
-       {/* 4. Bottom Actions Bar (Like MediaWiki Footer) */}
+       {/* 4. Bottom Actions Bar */}
        <div className="bg-wom-panel border-x border-b border-white/10 rounded-b-xl p-4 flex flex-col md:flex-row gap-4 items-center shadow-lg">
           <div className="flex-1 w-full">
              <div className="relative">
@@ -293,21 +365,27 @@ export const Editor: React.FC = () => {
                    <input type="checkbox" className="hidden" checked={isMinorEdit} onChange={() => setIsMinorEdit(!isMinorEdit)} />
                    <span className="text-xs text-gray-400 group-hover:text-white select-none">Minor edit</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                   <div className="w-4 h-4 rounded border border-gray-500 flex items-center justify-center transition-colors">
-                      {/* Watch dummy */}
+                
+                <button 
+                    onClick={toggleWatch}
+                    className="flex items-center gap-2 cursor-pointer group focus:outline-none"
+                >
+                   <div className={`w-4 h-4 flex items-center justify-center transition-colors ${isWatching ? 'text-wom-accent' : 'text-gray-500 group-hover:text-white'}`}>
+                      <Bell size={16} fill={isWatching ? "currentColor" : "none"} />
                    </div>
-                   <span className="text-xs text-gray-400 group-hover:text-white select-none">Watch this page</span>
-                </label>
+                   <span className={`text-xs select-none ${isWatching ? 'text-wom-accent font-bold' : 'text-gray-400 group-hover:text-white'}`}>
+                       {isWatching ? 'Watching' : 'Watch this page'}
+                   </span>
+                </button>
              </div>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
              <button 
-                onClick={() => alert("Preview functionality would open a modal here.")}
-                className="flex-1 md:flex-none px-6 py-2.5 rounded-lg border border-white/10 text-gray-300 font-bold hover:bg-white/5 hover:text-white transition-colors text-sm"
+                onClick={() => setShowPreview(!showPreview)}
+                className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg border font-bold transition-colors text-sm flex items-center gap-2 ${showPreview ? 'bg-wom-accent text-white border-wom-accent hover:bg-fuchsia-600' : 'border-white/10 text-gray-300 hover:bg-white/5 hover:text-white'}`}
              >
-                Show Preview
+                {showPreview ? <><EyeOff size={16}/> Edit Mode</> : <><Eye size={16}/> Show Preview</>}
              </button>
              <button 
                 onClick={handleSave}
@@ -326,12 +404,3 @@ export const Editor: React.FC = () => {
     </div>
   );
 };
-    
-// Helper Icon for external link
-const ExternalLink = ({size}: {size: number}) => (
-   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-      <polyline points="15 3 21 3 21 9"></polyline>
-      <line x1="10" y1="14" x2="21" y2="3"></line>
-   </svg>
-);

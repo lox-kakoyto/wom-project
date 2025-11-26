@@ -1,4 +1,3 @@
-
 export enum UserRole {
   USER = 'User',
   MODERATOR = 'Moderator',
@@ -14,6 +13,7 @@ export interface User {
   banner?: string; // New field
   bio?: string;
   joinDate: string;
+  watchlist?: string[]; // Array of article IDs or slugs
 }
 
 export enum ArticleCategory {

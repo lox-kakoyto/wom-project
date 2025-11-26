@@ -12,7 +12,7 @@ import { WikitextRenderer } from '../components/WikitextRenderer';
 export const Editor: React.FC = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { articles, addArticle, updateArticle, currentUser, templates } = useData();
+  const { articles, addArticle, updateArticle, currentUser, templates, mediaFiles, toggleWatch } = useData();
 
   // Core State
   const [content, setContent] = useState('');
@@ -27,7 +27,6 @@ export const Editor: React.FC = () => {
   // UI State
   const [summary, setSummary] = useState('');
   const [isMinorEdit, setIsMinorEdit] = useState(false);
-  const [isWatching, setIsWatching] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showSettings, setShowSettings] = useState(!slug); 
   const [showPreview, setShowPreview] = useState(false);
@@ -35,6 +34,9 @@ export const Editor: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Derived state
+  const isWatching = (currentUser.watchlist || []).includes(slug || urlSlug);
 
   // Load existing data
   useEffect(() => {
@@ -58,10 +60,15 @@ export const Editor: React.FC = () => {
     }
   }, [title, slug]);
 
-  const toggleWatch = () => {
-    const newState = !isWatching;
-    setIsWatching(newState);
-    setNotification(newState ? "Added to your watchlist." : "Removed from your watchlist.");
+  const handleToggleWatch = () => {
+    const targetSlug = slug || urlSlug;
+    if (!targetSlug) return;
+    
+    toggleWatch(targetSlug);
+    
+    // Show notification based on new state (which is inverted from current)
+    const willWatch = !isWatching;
+    setNotification(willWatch ? "Added to your watchlist." : "Removed from your watchlist.");
     setTimeout(() => setNotification(null), 3000);
   };
 
@@ -326,10 +333,11 @@ export const Editor: React.FC = () => {
           {showPreview ? (
               <div className="flex-1 w-full bg-[#0a0a0a] p-8 overflow-y-auto custom-scrollbar">
                   <div className="max-w-4xl mx-auto">
-                      <h2 className="text-3xl font-display font-bold text-white mb-6 border-b border-wom-primary/30 pb-4">
-                          Preview: {title}
-                      </h2>
-                      <WikitextRenderer content={content} />
+                      <div className="flex justify-between items-center mb-6 border-b border-wom-primary/30 pb-4">
+                        <h2 className="text-3xl font-display font-bold text-white">Preview Mode</h2>
+                        <button onClick={() => setShowPreview(false)} className="px-4 py-1 bg-white/10 hover:bg-white/20 rounded text-sm font-bold text-white">Return to Editor</button>
+                      </div>
+                      <WikitextRenderer content={content} mediaFiles={mediaFiles} />
                   </div>
               </div>
           ) : (
@@ -367,8 +375,9 @@ export const Editor: React.FC = () => {
                 </label>
                 
                 <button 
-                    onClick={toggleWatch}
+                    onClick={handleToggleWatch}
                     className="flex items-center gap-2 cursor-pointer group focus:outline-none"
+                    disabled={currentUser.id === 'guest'}
                 >
                    <div className={`w-4 h-4 flex items-center justify-center transition-colors ${isWatching ? 'text-wom-accent' : 'text-gray-500 group-hover:text-white'}`}>
                       <Bell size={16} fill={isWatching ? "currentColor" : "none"} />

@@ -158,7 +158,7 @@ const ArticleView: React.FC<{ slug: string }> = ({ slug }) => {
         
         {/* Main Content with Wikitext Renderer */}
         <div className="flex-1 min-w-0">
-           <WikitextRenderer content={article.content} />
+           <WikitextRenderer content={article.content} mediaFiles={mediaFiles} />
            <CommentSection articleId={article.id} comments={article.comments} />
         </div>
 

@@ -4,22 +4,21 @@ import {
   ChevronRight, AlertTriangle, Play, HelpCircle, CheckCircle, XCircle, 
   Box, Shield, Zap, Skull, Crown, Info, ChevronUp, ChevronDown 
 } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
 import { MediaItem } from '../types';
 
 /* ============================================================================
    HELPERS & PARSERS
    ============================================================================ */
 
-export const findMediaUrl = (filename: string, mediaFiles: MediaItem[]) => {
+export function findMediaUrl(filename: string, mediaFiles: MediaItem[]) {
     if (!filename) return '';
     if (filename.startsWith('http')) return filename; 
     const cleanName = filename.replace(/[[\]]/g, '').replace('File:', '').trim();
     const found = mediaFiles.find(m => m.filename === cleanName);
     return found ? found.url : 'https://via.placeholder.com/300?text=File+Not+Found';
-};
+}
 
-export const parseArgs = (inner: string) => {
+export function parseArgs(inner: string) {
     const args: Record<string, string> = {};
     const parts = inner.split('|');
     parts.forEach((part, index) => {
@@ -35,9 +34,9 @@ export const parseArgs = (inner: string) => {
         }
     });
     return { parts, args };
-};
+}
 
-export const parseInfobox = (content: string, mediaFiles: MediaItem[]) => {
+export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
   const match = content.match(/{{Infobox([\s\S]*?)}}/);
   if (!match) return null;
   
@@ -57,13 +56,13 @@ export const parseInfobox = (content: string, mediaFiles: MediaItem[]) => {
     }
   });
   return data;
-};
+}
 
 /* ============================================================================
    SUB-COMPONENTS
    ============================================================================ */
 
-const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
+function MarkdownBlock({ text }: { text: string }) {
     const lines = text.split('\n');
     return (
         <>
@@ -89,7 +88,7 @@ const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
     )
 }
 
-const TabberComponent: React.FC<{ tabs: {title: string, content: string}[] }> = ({ tabs }) => {
+function TabberComponent({ tabs, mediaFiles }: { tabs: {title: string, content: string}[], mediaFiles: MediaItem[] }) {
     const [activeTab, setActiveTab] = useState(0);
     if (tabs.length === 0) return null;
 
@@ -111,13 +110,14 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[] }> = 
                 ))}
             </div>
             <div className="p-6 bg-wom-panel/50 min-h-[200px]">
-                <WikitextRenderer content={tabs[activeTab].content} />
+                {/* Recursion works fine with function declarations */}
+                <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
             </div>
         </div>
     );
 }
 
-const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, content }) => {
+function NavboxComponent({ title, content }: { title: string, content: string }) {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
@@ -148,9 +148,8 @@ const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, 
    MAIN RENDERER
    ============================================================================ */
 
-export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => {
-  const { mediaFiles } = useData();
-
+export function WikitextRenderer({ content, mediaFiles }: { content: string, mediaFiles: MediaItem[] }) {
+  
   // 1. Remove Top-Level Infobox (rendered separately usually)
   let cleanContent = content.replace(/{{Infobox[\s\S]*?}}/, '').trim();
 
@@ -274,7 +273,7 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
                            <AlertTriangle size={16} className="text-wom-accent" /> {title} <span className="text-xs font-normal opacity-50 ml-auto">(Click to reveal)</span>
                        </summary>
                        <div className="p-4 bg-black/20 text-gray-300">
-                           <WikitextRenderer content={spoilerContent} />
+                           <WikitextRenderer content={spoilerContent} mediaFiles={mediaFiles} />
                        </div>
                    </details>
                );
@@ -289,7 +288,7 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
                              <ChevronRight size={14} className="transition-transform group-open:rotate-90"/> {title}
                         </summary>
                         <div className="mt-2 text-sm pl-4 text-gray-400">
-                             <WikitextRenderer content={content} />
+                             <WikitextRenderer content={content} mediaFiles={mediaFiles} />
                         </div>
                     </details>
                 );
@@ -347,7 +346,7 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
                        if(tTitle) tabs.push({ title: tTitle, content: tContent });
                    }
                });
-               return <TabberComponent key={index} tabs={tabs} />;
+               return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} />;
            }
 
            if (templateName === 'Quote') {
@@ -447,7 +446,7 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
                             </div>
                         )}
                         <div className="p-4 text-gray-300">
-                             <WikitextRenderer content={content} />
+                             <WikitextRenderer content={content} mediaFiles={mediaFiles} />
                         </div>
                     </div>
                 );
@@ -470,7 +469,7 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
                        <Icon className="shrink-0 mt-0.5" size={20} />
                        <div>
                            <div className="font-bold mb-1">{title}</div>
-                           <div className="text-sm opacity-90"><WikitextRenderer content={text} /></div>
+                           <div className="text-sm opacity-90"><WikitextRenderer content={text} mediaFiles={mediaFiles} /></div>
                        </div>
                    </div>
                );
@@ -489,4 +488,4 @@ export const WikitextRenderer: React.FC<{ content: string }> = ({ content }) => 
       })}
     </div>
   );
-};
+}

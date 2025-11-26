@@ -1,3 +1,4 @@
+
 export enum UserRole {
   USER = 'User',
   MODERATOR = 'Moderator',
@@ -38,6 +39,7 @@ export interface Comment {
   authorId: string;
   content: string;
   timestamp: string;
+  parentId?: string | null; // For DB mapping
   replies: Comment[];
 }
 

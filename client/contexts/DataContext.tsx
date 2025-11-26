@@ -45,6 +45,27 @@ const GUEST_USER: User = {
     joinDate: new Date().toLocaleDateString()
 };
 
+// Helper to build tree from flat comments with parentId
+const buildCommentTree = (flatComments: any[]): Comment[] => {
+    const commentMap: Record<string, Comment> = {};
+    const roots: Comment[] = [];
+
+    // Init map
+    flatComments.forEach(c => {
+        commentMap[c.id] = { ...c, replies: [] };
+    });
+
+    // Build tree
+    flatComments.forEach(c => {
+        if (c.parentId && commentMap[c.parentId]) {
+            commentMap[c.parentId].replies.push(commentMap[c.id]);
+        } else {
+            roots.push(commentMap[c.id]);
+        }
+    });
+    return roots;
+};
+
 interface DataContextType {
   currentUser: User;
   isAuthenticated: boolean;
@@ -72,7 +93,7 @@ interface DataContextType {
   replyToArticleComment: (articleId: string, parentCommentId: string, reply: Comment) => void;
   sendMessage: (msg: ChatMessage) => void;
   sendWallPost: (post: WallPost) => void;
-  replyToWallPost: (postId: string, parentCommentId: string | null, reply: Comment) => void; // NEW
+  replyToWallPost: (postId: string, parentCommentId: string | null, reply: Comment) => void;
   markNotificationRead: (id: string) => void;
   uploadMedia: (file: MediaItem) => void;
 }
@@ -86,31 +107,63 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const [users, setUsers] = useState<User[]>([]);
   const [articles, setArticles] = useState<Article[]>([]); 
-
-  // Mock data (Local Storage)
-  const [threads, setThreads] = useState<ColiseumThread[]>(() => JSON.parse(localStorage.getItem('wom_threads') || '[]'));
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => JSON.parse(localStorage.getItem('wom_chat') || '[]'));
-  const [wallPosts, setWallPosts] = useState<WallPost[]>(() => JSON.parse(localStorage.getItem('wom_wall') || '[]'));
-  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>(() => JSON.parse(localStorage.getItem('wom_media') || '[]'));
+  const [threads, setThreads] = useState<ColiseumThread[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [wallPosts, setWallPosts] = useState<WallPost[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>(() => JSON.parse(localStorage.getItem('wom_media') || '[]')); // Keep media local for now as DB storage for base64 is heavy without S3
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Load public data
-  useEffect(() => {
-    const fetchPublicData = async () => {
-        setIsLoading(true);
-        try {
-            const articlesRes = await fetch(`${API_URL}/articles`);
-            if (articlesRes.ok) setArticles(await articlesRes.json());
-            
-            const usersRes = await fetch(`${API_URL}/users`);
-            if (usersRes.ok) setUsers(await usersRes.json());
-        } catch (e) {
-            console.error("Failed to load public data", e);
-        } finally {
-            if (!token) setIsLoading(false);
+  // Load ALL public data from Server
+  const fetchAllData = async () => {
+    // setIsLoading(true); // Don't block UI too much on refetch
+    try {
+        // 1. Users
+        const usersRes = await fetch(`${API_URL}/users`);
+        if (usersRes.ok) setUsers(await usersRes.json());
+
+        // 2. Articles (with comments)
+        const articlesRes = await fetch(`${API_URL}/articles`);
+        if (articlesRes.ok) {
+            const rawArticles = await articlesRes.json();
+            // Process comments into trees
+            const processedArticles = rawArticles.map((a: any) => ({
+                ...a,
+                comments: buildCommentTree(a.comments)
+            }));
+            setArticles(processedArticles);
         }
-    };
-    fetchPublicData();
+
+        // 3. Chat
+        const chatRes = await fetch(`${API_URL}/chat`);
+        if (chatRes.ok) setChatMessages(await chatRes.json());
+
+        // 4. Coliseum Threads
+        const threadsRes = await fetch(`${API_URL}/coliseum/threads`);
+        if (threadsRes.ok) setThreads(await threadsRes.json());
+
+        // 5. Wall Posts
+        const wallRes = await fetch(`${API_URL}/wall`);
+        if (wallRes.ok) {
+            const rawWall = await wallRes.json();
+            const processedWall = rawWall.map((p: any) => ({
+                ...p,
+                comments: buildCommentTree(p.comments)
+            }));
+            setWallPosts(processedWall);
+        }
+
+    } catch (e) {
+        console.error("Failed to load data", e);
+    } finally {
+        if (!token) setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAllData();
+    // Optional: Polling every 5 seconds for chat/live updates
+    const interval = setInterval(fetchAllData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Verify Token
@@ -150,11 +203,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     verifyToken();
   }, [token]);
-
-  useEffect(() => localStorage.setItem('wom_threads', JSON.stringify(threads)), [threads]);
-  useEffect(() => localStorage.setItem('wom_chat', JSON.stringify(chatMessages)), [chatMessages]);
-  useEffect(() => localStorage.setItem('wom_wall', JSON.stringify(wallPosts)), [wallPosts]);
-  useEffect(() => localStorage.setItem('wom_media', JSON.stringify(mediaFiles)), [mediaFiles]);
 
   const login = async (email: string, pass: string): Promise<boolean> => {
       setIsLoading(true);
@@ -260,78 +308,98 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(article)
       });
-      if (response.ok) {
-        const savedArticle = await response.json(); 
-        const formattedArticle: Article = {
-           ...article,
-           id: savedArticle.id.toString(),
-           authorId: savedArticle.author_id ? savedArticle.author_id.toString() : currentUser.id
-        };
-        setArticles(prev => [formattedArticle, ...prev]);
-      }
+      if (response.ok) fetchAllData();
     } catch (e) { console.error(e); }
   };
 
-  const updateArticle = (updated: Article) => {
-    setArticles(prev => prev.map(a => a.id === updated.id ? updated : a));
-  };
-  const addThread = (thread: ColiseumThread) => setThreads(prev => [thread, ...prev]);
-  const addThreadComment = (threadId: string, comment: Comment) => {
-    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, comments: [...t.comments, comment] } : t));
-  };
-  const addArticleComment = (articleId: string, comment: Comment) => {
-    setArticles(prev => prev.map(a => a.id === articleId ? { ...a, comments: [...a.comments, comment] } : a));
+  const updateArticle = async (updated: Article) => {
+      try {
+        const response = await fetch(`${API_URL}/articles`, {
+            method: 'POST', // Using POST for upsert logic on server
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated)
+        });
+        if (response.ok) fetchAllData();
+      } catch (e) { console.error(e); }
   };
 
-  const replyToArticleComment = (articleId: string, parentCommentId: string, reply: Comment) => {
-      const addReplyToComment = (comments: Comment[]): Comment[] => {
-          return comments.map(c => {
-              if (c.id === parentCommentId) {
-                  return { ...c, replies: [...(c.replies || []), reply] };
-              }
-              if (c.replies && c.replies.length > 0) {
-                  return { ...c, replies: addReplyToComment(c.replies) };
-              }
-              return c;
+  const addThread = async (thread: ColiseumThread) => {
+      try {
+          const res = await fetch(`${API_URL}/coliseum/threads`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(thread)
           });
-      };
-
-      setArticles(prev => prev.map(a => {
-          if (a.id === articleId) {
-              return { ...a, comments: addReplyToComment(a.comments) };
-          }
-          return a;
-      }));
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
   };
 
-  const replyToWallPost = (postId: string, parentCommentId: string | null, reply: Comment) => {
-      setWallPosts(prev => prev.map(post => {
-          if (post.id === postId) {
-              if (parentCommentId === null) {
-                  // Reply to the main post (add to root comments)
-                  return { ...post, comments: [...(post.comments || []), reply] };
-              } else {
-                  // Reply to a comment
-                  const addReply = (comments: Comment[]): Comment[] => {
-                      return comments.map(c => {
-                          if (c.id === parentCommentId) {
-                              return { ...c, replies: [...(c.replies || []), reply] };
-                          }
-                          if (c.replies) {
-                              return { ...c, replies: addReply(c.replies) };
-                          }
-                          return c;
-                      });
-                  };
-                  return { ...post, comments: addReply(post.comments || []) };
-              }
-          }
-          return post;
-      }));
+  const addThreadComment = async (threadId: string, comment: Comment) => {
+      try {
+          const res = await fetch(`${API_URL}/coliseum/comments`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ threadId, authorId: currentUser.id, content: comment.content })
+          });
+          if(res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
   };
 
-  const sendMessage = (msg: ChatMessage) => setChatMessages(prev => [...prev, msg]);
-  const sendWallPost = (post: WallPost) => setWallPosts(prev => [post, ...prev]);
+  const addArticleComment = async (articleId: string, comment: Comment) => {
+      try {
+          const res = await fetch(`${API_URL}/articles/comments`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ articleId, authorId: currentUser.id, content: comment.content, parentId: null })
+          });
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
+  };
+
+  const replyToArticleComment = async (articleId: string, parentCommentId: string, reply: Comment) => {
+      try {
+          const res = await fetch(`${API_URL}/articles/comments`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ articleId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
+          });
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
+  };
+
+  const replyToWallPost = async (postId: string, parentCommentId: string | null, reply: Comment) => {
+      try {
+          const res = await fetch(`${API_URL}/wall/comments`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ postId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
+          });
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
+  };
+
+  const sendMessage = async (msg: ChatMessage) => {
+      try {
+          const res = await fetch(`${API_URL}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(msg)
+          });
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
+  };
+
+  const sendWallPost = async (post: WallPost) => {
+      try {
+          const res = await fetch(`${API_URL}/wall`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(post)
+          });
+          if (res.ok) fetchAllData();
+      } catch (e) { console.error(e); }
+  };
+
   const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   const uploadMedia = (file: MediaItem) => setMediaFiles(prev => [file, ...prev]);
 

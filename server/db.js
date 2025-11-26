@@ -6,8 +6,7 @@ const connectionString = process.env.DATABASE_URL;
 const pool = new Pool(
   connectionString
     ? {
-        connectionString: connectionString,
-        ssl: false
+        connectionString: connectionString
       }
     : {
         user: process.env.DB_USER,

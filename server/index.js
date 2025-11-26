@@ -105,9 +105,15 @@ app.post("/auth/register", async (req, res) => {
         res.json({ token, user: newUser.rows[0] });
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ error: "Server error during registration" });
-    }
+        // МЫ ДОБАВЛЯЕМ ВЫВОД ПОЛНОГО ОБЪЕКТА ОШИБКИ
+        console.error("🔥 ПОЛНАЯ ОШИБКА РЕГИСТРАЦИИ 🔥:", err);
+        
+        // И отправляем чуть больше деталей на фронтенд, чтобы сразу видеть
+        res.status(500).json({ 
+            error: "Server error during registration",
+            details: err.message // Добавляем детали ошибки в ответ клиенту
+        });
+    }
 });
 
 // LOGIN

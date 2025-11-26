@@ -7,6 +7,7 @@ const pool = new Pool(
   connectionString
     ? {
         connectionString: connectionString,
+        ssl: false
       }
     : {
         user: process.env.DB_USER,

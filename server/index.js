@@ -84,35 +84,39 @@ app.post("/auth/google", async (req, res) => {
 
 // REGISTER
 app.post("/auth/register", async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
+    console.log("👉 НАЧАЛО РЕГИСТРАЦИИ. Получен запрос."); // <-- ДОБАВЬ
 
-        const userCheck = await pool.query("SELECT * FROM users WHERE email = $1 OR username = $2", [email, username]);
-        if (userCheck.rows.length > 0) {
-            return res.status(401).json({ error: "User with this email or username already exists." });
-        }
+    try {
+        const { username, email, password } = req.body;
+        console.log("👉 Данные получены:", { username, email }); // <-- ДОБАВЬ (пароль не логируем!)
 
-        const salt = await bcrypt.genSalt(10);
-        const bcryptPassword = await bcrypt.hash(password, salt);
+        console.log("👉 Проверка пользователя в базе..."); // <-- ДОБАВЬ
+        const userCheck = await pool.query("SELECT * FROM users WHERE email = $1 OR username = $2", [email, username]);
+        if (userCheck.rows.length > 0) {
+            console.log("👉 Ошибка: Пользователь уже существует."); // <-- ДОБАВЬ
+            return res.status(401).json({ error: "User with this email or username already exists." });
+        }
 
-        const newUser = await pool.query(
-            "INSERT INTO users (username, email, password_hash, role, avatar, banner) VALUES($1, $2, $3, 'User', '', '') RETURNING *",
-            [username, email, bcryptPassword]
-        );
+        console.log("👉 Хеширование пароля..."); // <-- ДОБАВЬ
+        const salt = await bcrypt.genSalt(10);
+        const bcryptPassword = await bcrypt.hash(password, salt);
 
-        const token = jwt.sign({ id: newUser.rows[0].id }, JWT_SECRET, { expiresIn: "7d" });
+        console.log("👉 Запись нового пользователя в базу..."); // <-- ДОБАВЬ
+        const newUser = await pool.query(
+            "INSERT INTO users (username, email, password_hash, role, avatar, banner) VALUES($1, $2, $3, 'User', '', '') RETURNING *",
+            [username, email, bcryptPassword]
+        );
+        console.log("👉 Пользователь успешно записан. ID:", newUser.rows[0].id); // <-- ДОБАВЬ
 
-        res.json({ token, user: newUser.rows[0] });
+        console.log("👉 Генерация токена..."); // <-- ДОБАВЬ
+        const token = jwt.sign({ id: newUser.rows[0].id }, JWT_SECRET, { expiresIn: "7d" });
 
-    } catch (err) {
-        // МЫ ДОБАВЛЯЕМ ВЫВОД ПОЛНОГО ОБЪЕКТА ОШИБКИ
-        console.error("🔥 ПОЛНАЯ ОШИБКА РЕГИСТРАЦИИ 🔥:", err);
-        
-        // И отправляем чуть больше деталей на фронтенд, чтобы сразу видеть
-        res.status(500).json({ 
-            error: "Server error during registration",
-            details: err.message // Добавляем детали ошибки в ответ клиенту
-        });
+        console.log("👉 Отправка успешного ответа клиенту."); // <-- ДОБАВЬ
+        res.json({ token, user: newUser.rows[0] });
+
+    } catch (err) {
+        console.error("🔥 ПОЛНАЯ ОШИБКА РЕГИСТРАЦИИ 🔥:", err); // Эту строку оставь
+        res.status(500).json({ error: "Server error during registration", details: err.message });
     }
 });
 

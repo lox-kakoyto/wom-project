@@ -3,8 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "vite",
-    "start": "vite",
+    "dev": "nodemon index.js",
+    "start": "node index.js",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

@@ -11,13 +11,11 @@ export const MediaGallery: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleFile = (file: File) => {
-    // Stricter limit for video to prevent browser crashing with LocalStorage/Base64
-    if (file.type.startsWith('video') && file.size > 3000000) {
-         alert("Videos are limited to 3MB to prevent browser freezing. Please compress your file.");
-         return;
-    }
-    if (file.size > 5000000) { // 5MB limit for images
-        alert("File too large. Max 5MB.");
+    // Limit set to 10MB
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+
+    if (file.size > MAX_SIZE) { 
+        alert("File too large. Max 10MB.");
         return;
     }
 
@@ -89,7 +87,7 @@ export const MediaGallery: React.FC = () => {
         >
             <FileImage size={48} className="text-gray-500 mb-4" />
             <p className="text-gray-300 font-bold">Drag and drop files here</p>
-            <p className="text-xs text-gray-500 mt-2">Supports JPG, PNG, GIF, MP4, MP3 (Max 5MB)</p>
+            <p className="text-xs text-gray-500 mt-2">Supports JPG, PNG, GIF, MP4, MP3 (Max 10MB)</p>
         </div>
 
         {/* Gallery Grid */}
@@ -119,7 +117,7 @@ export const MediaGallery: React.FC = () => {
                     <div className="flex justify-between items-start">
                         <div className="overflow-hidden w-full">
                             <p className="text-sm font-bold text-white truncate" title={file.filename}>{file.filename}</p>
-                            <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(0)} KB • {file.timestamp}</p>
+                            <p className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB • {file.timestamp}</p>
                         </div>
                     </div>
 

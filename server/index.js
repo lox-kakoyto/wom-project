@@ -210,11 +210,6 @@ app.get("/articles", async (req, res) => {
         const formattedArticles = allArticles.rows.map(row => {
             // Filter comments for this article
             const rawComments = allComments.rows.filter(c => c.article_id === row.id);
-            // Helper to build tree is complex on server, let's send flat list with parent_id and let client build tree
-            // Or simpler: Client expects recursive structure. Ideally client builds it. 
-            // We will map raw comments to client shape but keep them flat in JSON for now or let client handle it.
-            // To minimize client refactor, let's send flat list but client needs to parse it.
-            // Actually, let's structure comments as flat array in response, client DataContext will tree-ify them.
             
             const mappedComments = rawComments.map(c => ({
                 id: c.id.toString(),
@@ -434,6 +429,38 @@ app.post("/wall/comments", async (req, res) => {
     }
 });
 
+// MEDIA ROUTES
+app.get("/media", async (req, res) => {
+    try {
+        const result = await pool.query("SELECT * FROM media_files ORDER BY created_at DESC");
+        const formatted = result.rows.map(m => ({
+            id: m.id.toString(),
+            filename: m.filename,
+            url: m.url,
+            uploaderId: m.uploader_id ? m.uploader_id.toString() : '0',
+            timestamp: new Date(m.created_at).toLocaleString(),
+            type: m.type,
+            size: m.size
+        }));
+        res.json(formatted);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/media", async (req, res) => {
+    try {
+        const { filename, url, uploaderId, type, size } = req.body;
+        const newMedia = await pool.query(
+            "INSERT INTO media_files (filename, url, uploader_id, type, size) VALUES($1, $2, $3, $4, $5) RETURNING *",
+            [filename, url, uploaderId, type, size]
+        );
+        res.json(newMedia.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // DB INITIALIZATION
 const initDB = async () => {
@@ -535,6 +562,19 @@ const initDB = async () => {
                 author_id INTEGER REFERENCES users(id),
                 content TEXT NOT NULL,
                 parent_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Media Files
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS media_files (
+                id SERIAL PRIMARY KEY,
+                filename TEXT NOT NULL,
+                url TEXT NOT NULL,
+                uploader_id INTEGER REFERENCES users(id),
+                type VARCHAR(20),
+                size INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);

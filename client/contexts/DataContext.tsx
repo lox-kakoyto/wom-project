@@ -110,12 +110,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [threads, setThreads] = useState<ColiseumThread[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [wallPosts, setWallPosts] = useState<WallPost[]>([]);
-  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>(() => JSON.parse(localStorage.getItem('wom_media') || '[]')); // Keep media local for now as DB storage for base64 is heavy without S3
+  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Load ALL public data from Server
   const fetchAllData = async () => {
-    // setIsLoading(true); // Don't block UI too much on refetch
     try {
         // 1. Users
         const usersRes = await fetch(`${API_URL}/users`);
@@ -152,6 +151,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setWallPosts(processedWall);
         }
 
+        // 6. Media
+        const mediaRes = await fetch(`${API_URL}/media`);
+        if (mediaRes.ok) setMediaFiles(await mediaRes.json());
+
     } catch (e) {
         console.error("Failed to load data", e);
     } finally {
@@ -161,7 +164,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     fetchAllData();
-    // Optional: Polling every 5 seconds for chat/live updates
+    // Polling every 5 seconds for chat/live updates
     const interval = setInterval(fetchAllData, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -287,15 +290,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }) => {
       try {
-          const res = await fetch(`${API_URL}/users/${id}`, {
+          // Optimistic update
+          setCurrentUser(prev => ({ ...prev, ...data }));
+          setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+
+          await fetch(`${API_URL}/users/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(data)
           });
-          if (res.ok) {
-              setCurrentUser(prev => ({ ...prev, ...data }));
-              setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
-          }
       } catch (e) {
           console.error("Update failed", e);
       }
@@ -303,105 +306,177 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addArticle = async (article: Article) => {
     try {
-      const response = await fetch(`${API_URL}/articles`, {
+      await fetch(`${API_URL}/articles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(article)
       });
-      if (response.ok) fetchAllData();
+      fetchAllData();
     } catch (e) { console.error(e); }
   };
 
   const updateArticle = async (updated: Article) => {
       try {
-        const response = await fetch(`${API_URL}/articles`, {
-            method: 'POST', // Using POST for upsert logic on server
+        await fetch(`${API_URL}/articles`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updated)
         });
-        if (response.ok) fetchAllData();
+        fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const addThread = async (thread: ColiseumThread) => {
+      // Optimistic
+      setThreads(prev => [thread, ...prev]);
       try {
-          const res = await fetch(`${API_URL}/coliseum/threads`, {
+          await fetch(`${API_URL}/coliseum/threads`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(thread)
           });
-          if (res.ok) fetchAllData();
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e); 
+          setThreads(prev => prev.filter(t => t.id !== thread.id)); // Revert
+      }
   };
 
   const addThreadComment = async (threadId: string, comment: Comment) => {
+      // Optimistic
+      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, comments: [...t.comments, comment] } : t));
       try {
-          const res = await fetch(`${API_URL}/coliseum/comments`, {
+          await fetch(`${API_URL}/coliseum/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ threadId, authorId: currentUser.id, content: comment.content })
           });
-          if(res.ok) fetchAllData();
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e); 
+          // Revert logic omitted for brevity, simple removal
+      }
   };
 
   const addArticleComment = async (articleId: string, comment: Comment) => {
+      // Optimistic
+      setArticles(prev => prev.map(a => a.id === articleId ? { ...a, comments: [...a.comments, comment] } : a));
       try {
-          const res = await fetch(`${API_URL}/articles/comments`, {
+          await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: comment.content, parentId: null })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const replyToArticleComment = async (articleId: string, parentCommentId: string, reply: Comment) => {
+      // Optimistic Logic
+      const addReplyToComment = (comments: Comment[]): Comment[] => {
+          return comments.map(c => {
+              if (c.id === parentCommentId) {
+                  return { ...c, replies: [...(c.replies || []), reply] };
+              }
+              if (c.replies && c.replies.length > 0) {
+                  return { ...c, replies: addReplyToComment(c.replies) };
+              }
+              return c;
+          });
+      };
+      
+      setArticles(prev => prev.map(a => {
+          if (a.id === articleId) {
+              return { ...a, comments: addReplyToComment(a.comments) };
+          }
+          return a;
+      }));
+
       try {
-          const res = await fetch(`${API_URL}/articles/comments`, {
+          await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const replyToWallPost = async (postId: string, parentCommentId: string | null, reply: Comment) => {
+      // Optimistic Logic
+      setWallPosts(prev => prev.map(post => {
+          if (post.id === postId) {
+              if (parentCommentId === null) {
+                  return { ...post, comments: [...(post.comments || []), reply] };
+              } else {
+                  const addReply = (comments: Comment[]): Comment[] => {
+                      return comments.map(c => {
+                          if (c.id === parentCommentId) {
+                              return { ...c, replies: [...(c.replies || []), reply] };
+                          }
+                          if (c.replies) {
+                              return { ...c, replies: addReply(c.replies) };
+                          }
+                          return c;
+                      });
+                  };
+                  return { ...post, comments: addReply(post.comments || []) };
+              }
+          }
+          return post;
+      }));
+
       try {
-          const res = await fetch(`${API_URL}/wall/comments`, {
+          await fetch(`${API_URL}/wall/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ postId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const sendMessage = async (msg: ChatMessage) => {
+      // Optimistic
+      setChatMessages(prev => [...prev, msg]);
       try {
-          const res = await fetch(`${API_URL}/chat`, {
+          await fetch(`${API_URL}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(msg)
           });
-          if (res.ok) fetchAllData();
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e);
+          setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+      }
   };
 
   const sendWallPost = async (post: WallPost) => {
+      // Optimistic
+      setWallPosts(prev => [post, ...prev]);
       try {
-          const res = await fetch(`${API_URL}/wall`, {
+          await fetch(`${API_URL}/wall`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(post)
           });
-          if (res.ok) fetchAllData();
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e);
+          setWallPosts(prev => prev.filter(p => p.id !== post.id));
+      }
   };
 
   const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  const uploadMedia = (file: MediaItem) => setMediaFiles(prev => [file, ...prev]);
+  
+  const uploadMedia = async (file: MediaItem) => {
+      // Optimistic
+      setMediaFiles(prev => [file, ...prev]);
+      try {
+          await fetch(`${API_URL}/media`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(file)
+          });
+      } catch (e) {
+          console.error(e);
+          setMediaFiles(prev => prev.filter(f => f.id !== file.id));
+      }
+  };
 
   return (
     <DataContext.Provider value={{

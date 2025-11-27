@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { 
@@ -34,6 +35,7 @@ export const Editor: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const templateMenuRef = useRef<HTMLDivElement>(null);
 
   // Derived state
   const isWatching = (currentUser.watchlist || []).includes(slug || urlSlug);
@@ -53,6 +55,17 @@ export const Editor: React.FC = () => {
     }
   }, [slug, articles]);
 
+  // Click outside to close templates
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+        if (templateMenuRef.current && !templateMenuRef.current.contains(event.target as Node)) {
+            setShowTemplates(false);
+        }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [templateMenuRef]);
+
   // Auto-generate slug for new articles
   useEffect(() => {
     if (!slug) {
@@ -66,7 +79,7 @@ export const Editor: React.FC = () => {
     
     toggleWatch(targetSlug);
     
-    // Show notification based on new state (which is inverted from current)
+    // Show notification based on future state
     const willWatch = !isWatching;
     setNotification(willWatch ? "Added to your watchlist." : "Removed from your watchlist.");
     setTimeout(() => setNotification(null), 3000);
@@ -124,7 +137,7 @@ export const Editor: React.FC = () => {
        
        {/* Notification Toast */}
        {notification && (
-           <div className="absolute top-0 left-1/2 -translate-x-1/2 mt-4 z-50 px-6 py-3 bg-wom-primary text-white rounded-full shadow-lg font-bold text-sm animate-fade-in flex items-center gap-2">
+           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 bg-wom-primary text-white rounded-full shadow-lg font-bold text-sm animate-fade-in flex items-center gap-2">
                <Check size={16} /> {notification}
            </div>
        )}
@@ -217,7 +230,8 @@ export const Editor: React.FC = () => {
        )}
 
        {/* 3. Editor Container (Toolbar + Textarea/Preview) */}
-       <div className="flex-1 flex flex-col min-h-0 bg-black/20 border border-white/10 rounded-t-xl overflow-hidden shadow-2xl relative">
+       {/* Removed overflow-hidden to allow dropdowns to be visible */}
+       <div className="flex-1 flex flex-col min-h-0 bg-black/20 border border-white/10 rounded-t-xl shadow-2xl relative">
           
           {/* Toolbar Tabs - Hide in preview mode */}
           {!showPreview && (
@@ -245,7 +259,8 @@ export const Editor: React.FC = () => {
              </div>
 
              {/* Tab Content */}
-             <div className="p-3 bg-black/20 min-h-[56px] flex items-center gap-2 overflow-x-auto custom-scrollbar">
+             {/* Use flex-wrap instead of overflow-x-auto to prevent clipping of dropdowns */}
+             <div className="p-3 bg-black/20 min-h-[56px] flex flex-wrap items-center gap-2 custom-scrollbar">
                 {/* Formatting Tab */}
                 {activeTab === 'formatting' && (
                    <>
@@ -296,7 +311,7 @@ export const Editor: React.FC = () => {
                       </Link>
                       <div className="w-px h-6 bg-white/10 mx-2"></div>
                       
-                      <div className="relative">
+                      <div className="relative" ref={templateMenuRef}>
                          <button 
                             onClick={() => setShowTemplates(!showTemplates)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-colors ${showTemplates ? 'bg-wom-primary text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
@@ -305,13 +320,22 @@ export const Editor: React.FC = () => {
                          </button>
                          
                          {showTemplates && (
-                            <div className="absolute left-0 top-full mt-2 w-72 bg-wom-panel border border-wom-primary/30 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+                            <div className="absolute left-0 top-full mt-2 w-72 bg-wom-panel border border-wom-primary/30 rounded-lg shadow-2xl z-[50] max-h-80 overflow-y-auto custom-scrollbar">
                                <div className="sticky top-0 bg-wom-panel p-2 text-xs font-bold text-gray-500 uppercase border-b border-white/5">Available Templates</div>
                                {templates.map((t, i) => (
                                   <button 
                                      key={i}
                                      onClick={() => {
-                                        insertAtCursor(t.content);
+                                        // Insert at top if Infobox
+                                        if (t.name.includes("Infobox")) {
+                                            const textarea = textareaRef.current;
+                                            if (textarea) {
+                                                const currentVal = textarea.value;
+                                                setContent(t.content + '\n\n' + currentVal);
+                                            }
+                                        } else {
+                                            insertAtCursor(t.content);
+                                        }
                                         setShowTemplates(false);
                                      }}
                                      className="w-full text-left px-4 py-3 border-b border-white/5 hover:bg-wom-primary/10 transition-colors group"

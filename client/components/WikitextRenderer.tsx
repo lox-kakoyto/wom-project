@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -37,24 +38,39 @@ export function parseArgs(inner: string) {
 }
 
 export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
-  const match = content.match(/{{Infobox([\s\S]*?)}}/);
+  // Regex to find Infobox. Uses [\s\S]*? to match across newlines non-greedily.
+  // We try to match {{Infobox ... }}
+  const match = content.match(/{{Infobox\s*\|?([\s\S]*?)}}/i);
+  
   if (!match) return null;
   
   const rawData = match[1];
-  const lines = rawData.split('\n').filter(l => l.includes('='));
+  // Split by pipe | but be careful not to split pipes inside internal links [[|]]
+  // Simple approach: split by newline, then look for | char at start or after trim
+  const lines = rawData.split('\n');
   const data: Record<string, string> = {};
   
   lines.forEach(line => {
-    const [key, ...valParts] = line.split('=');
-    const val = valParts.join('='); 
-    if (key && val) {
-      let finalVal = val.trim();
-      if (key.trim() === 'image' && finalVal.startsWith('File:')) {
-          finalVal = findMediaUrl(finalVal, mediaFiles);
-      }
-      data[key.replace('|', '').trim()] = finalVal;
+    let cleanLine = line.trim();
+    if (cleanLine.startsWith('|')) cleanLine = cleanLine.substring(1).trim();
+    
+    const eqIndex = cleanLine.indexOf('=');
+    if (eqIndex > -1) {
+        const key = cleanLine.substring(0, eqIndex).trim();
+        let val = cleanLine.substring(eqIndex + 1).trim();
+        
+        if (key && val) {
+            if (key.toLowerCase() === 'image' && val.includes('File:')) {
+                // Strip [[ ]] if present
+                val = val.replace(/[[\]]/g, '');
+                val = findMediaUrl(val, mediaFiles);
+            }
+            data[key] = val;
+        }
     }
   });
+  
+  if (Object.keys(data).length === 0) return null;
   return data;
 }
 
@@ -150,8 +166,14 @@ function NavboxComponent({ title, content }: { title: string, content: string })
 
 export function WikitextRenderer({ content, mediaFiles }: { content: string, mediaFiles: MediaItem[] }) {
   
-  // 1. Remove Top-Level Infobox (rendered separately usually)
-  let cleanContent = content.replace(/{{Infobox[\s\S]*?}}/, '').trim();
+  // 1. Remove Top-Level Infobox for main render (it's handled by sidebar usually)
+  // Be robust: replace only the first occurrence if it starts near the top
+  let cleanContent = content;
+  const infoboxMatch = content.match(/{{Infobox[\s\S]*?}}/i);
+  if (infoboxMatch && infoboxMatch.index !== undefined && infoboxMatch.index < 50) {
+      // Only remove if it's at the start of the article
+      cleanContent = content.replace(infoboxMatch[0], '').trim();
+  }
 
   // 2. Advanced Splitter
   const parts: string[] = [];

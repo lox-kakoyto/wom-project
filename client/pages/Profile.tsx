@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Calendar, Edit3, Camera, Save, X, Reply } from 'lucide-react';
@@ -27,8 +26,11 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
         setReplyText('');
     };
 
+    // Limit indent to depth 3 to avoid squeeze
+    const indentClass = depth > 0 && depth < 4 ? 'ml-8 md:ml-12 border-l border-white/10 pl-4' : 'mt-3 border-t border-white/5 pt-3';
+
     return (
-        <div className={`flex gap-3 mb-3 ${depth > 0 ? 'ml-8 md:ml-12 border-l border-white/10 pl-4' : ''}`}>
+        <div className={`flex gap-3 mb-3 ${indentClass}`}>
              <div className="shrink-0">
                  <img src={authorAvatar} className="w-6 h-6 rounded-full object-cover" alt="User" />
              </div>
@@ -37,7 +39,7 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
                      <span className="font-bold text-gray-300 text-xs">{author.username}</span>
                      <span className="text-[10px] text-gray-600">{comment.timestamp}</span>
                  </div>
-                 <p className="text-gray-400 text-xs leading-relaxed mb-1">{comment.content}</p>
+                 <p className="text-gray-400 text-xs leading-relaxed mb-1 whitespace-pre-wrap">{comment.content}</p>
                  
                  {currentUser.id !== 'guest' && (
                      <button 
@@ -304,7 +306,7 @@ export const Profile: React.FC = () => {
                                         <span className="font-bold text-white">{author.username}</span>
                                         <span className="text-xs text-gray-500">{post.timestamp}</span>
                                     </div>
-                                    <p className="text-gray-300 mb-2">{post.content}</p>
+                                    <p className="text-gray-300 mb-2 whitespace-pre-wrap">{post.content}</p>
                                     
                                     {/* Reply Button for Post */}
                                     {currentUser.id !== 'guest' && (

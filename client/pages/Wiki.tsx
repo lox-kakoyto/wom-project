@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PenTool, Filter, HardDrive, MessageCircle, ArrowRight } from 'lucide-react';
@@ -30,8 +31,11 @@ const SingleComment: React.FC<{ comment: Comment, articleId: string, depth?: num
         setReplyText('');
     };
 
+    // Cap visual indentation
+    const indentClass = depth > 0 && depth < 4 ? 'ml-8 md:ml-12 border-l-2 border-white/10 pl-4' : 'mt-3 border-t border-white/5 pt-3';
+
     return (
-        <div className={`flex gap-3 mb-4 ${depth > 0 ? 'ml-8 md:ml-12 border-l-2 border-white/10 pl-4' : ''}`}>
+        <div className={`flex gap-3 mb-4 ${indentClass}`}>
              <div className="shrink-0">
                  <img src={author.avatar} className="w-8 h-8 rounded-full object-cover" alt="User" />
              </div>

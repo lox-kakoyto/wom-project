@@ -57,8 +57,8 @@ app.post("/auth/google", async (req, res) => {
             const bcryptPassword = await bcrypt.hash(randomPassword, salt);
             
             const newUser = await pool.query(
-                "INSERT INTO users (username, email, password_hash, role, avatar, banner) VALUES($1, $2, $3, 'User', $4, '') RETURNING *",
-                [name, email, bcryptPassword, picture]
+                "INSERT INTO users (username, email, password_hash, role, avatar, banner, watchlist) VALUES($1, $2, $3, 'User', $4, '', $5) RETURNING *",
+                [name, email, bcryptPassword, picture, []]
             );
             user = newUser.rows[0];
         }
@@ -88,8 +88,8 @@ app.post("/auth/register", async (req, res) => {
         const bcryptPassword = await bcrypt.hash(password, salt);
 
         const newUser = await pool.query(
-            "INSERT INTO users (username, email, password_hash, role, avatar, banner) VALUES($1, $2, $3, 'User', '', '') RETURNING *",
-            [username, email, bcryptPassword]
+            "INSERT INTO users (username, email, password_hash, role, avatar, banner, watchlist) VALUES($1, $2, $3, 'User', '', '', $4) RETURNING *",
+            [username, email, bcryptPassword, []]
         );
 
         const token = jwt.sign({ id: newUser.rows[0].id }, JWT_SECRET, { expiresIn: "7d" });
@@ -169,7 +169,8 @@ app.get("/users", async (req, res) => {
             avatar: user.avatar || '',
             banner: user.banner || '',
             bio: user.bio,
-            joinDate: new Date(user.created_at).toLocaleDateString()
+            joinDate: new Date(user.created_at).toLocaleDateString(),
+            watchlist: user.watchlist || []
         }));
         res.json(formattedUsers);
     } catch (err) {
@@ -201,6 +202,62 @@ app.put("/users/:id", async (req, res) => {
     }
 });
 
+// Toggle Watchlist
+app.post("/users/:id/watchlist", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { slug } = req.body;
+        
+        const userRes = await pool.query("SELECT watchlist FROM users WHERE id = $1", [id]);
+        if(userRes.rows.length === 0) return res.status(404).json({error: "User not found"});
+        
+        let list = userRes.rows[0].watchlist || [];
+        
+        if(list.includes(slug)) {
+            list = list.filter(s => s !== slug);
+        } else {
+            list.push(slug);
+        }
+        
+        const update = await pool.query("UPDATE users SET watchlist = $1 WHERE id = $2 RETURNING watchlist", [list, id]);
+        res.json({ watchlist: update.rows[0].watchlist });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// NOTIFICATIONS
+app.get("/notifications/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const notes = await pool.query("SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50", [userId]);
+        
+        const formatted = notes.rows.map(n => ({
+            id: n.id.toString(),
+            userId: n.user_id.toString(),
+            type: n.type,
+            content: n.content,
+            read: n.is_read,
+            timestamp: new Date(n.created_at).toLocaleString(),
+            link: n.link
+        }));
+        res.json(formatted);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put("/notifications/:id/read", async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query("UPDATE notifications SET is_read = TRUE WHERE id = $1", [id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // ARTICLES
 app.get("/articles", async (req, res) => {
     try {
@@ -208,16 +265,14 @@ app.get("/articles", async (req, res) => {
         const allComments = await pool.query("SELECT * FROM article_comments ORDER BY created_at ASC");
         
         const formattedArticles = allArticles.rows.map(row => {
-            // Filter comments for this article
             const rawComments = allComments.rows.filter(c => c.article_id === row.id);
-            
             const mappedComments = rawComments.map(c => ({
                 id: c.id.toString(),
                 authorId: c.author_id.toString(),
                 content: c.content,
                 timestamp: new Date(c.created_at).toLocaleTimeString(),
                 parentId: c.parent_id ? c.parent_id.toString() : null,
-                replies: [] // Client will populate
+                replies: [] 
             }));
 
             return {
@@ -243,22 +298,39 @@ app.post("/articles", async (req, res) => {
     try {
         const { slug, title, content, category, authorId, imageUrl, tags } = req.body;
         
-        // If editing existing article
+        // Check for existing article
         const existing = await pool.query("SELECT id FROM articles WHERE slug = $1", [slug]);
         
+        let result;
         if (existing.rows.length > 0) {
              const updated = await pool.query(
                 "UPDATE articles SET title=$1, content=$2, category=$3, image_url=$4, tags=$5 WHERE slug=$6 RETURNING *",
                 [title, content, category, imageUrl, tags, slug]
              );
-             res.json(updated.rows[0]);
+             result = updated.rows[0];
+
+             // --- NOTIFICATION LOGIC ---
+             // Find users watching this slug (using Postgres array operator @>)
+             const watchers = await pool.query("SELECT id FROM users WHERE watchlist @> $1", [[slug]]);
+             
+             for (const watcher of watchers.rows) {
+                 if (watcher.id.toString() !== authorId.toString()) {
+                     await pool.query(
+                         "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'system', $2, $3)",
+                         [watcher.id, `Page "${title}" was updated.`, `/wiki/${slug}`]
+                     );
+                 }
+             }
+             // --------------------------
+
         } else {
              const newArticle = await pool.query(
                 "INSERT INTO articles (slug, title, content, category, author_id, image_url, tags) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *",
                 [slug, title, content, category, authorId, imageUrl, tags]
              );
-             res.json(newArticle.rows[0]);
+             result = newArticle.rows[0];
         }
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -267,7 +339,6 @@ app.post("/articles", async (req, res) => {
 app.post("/articles/comments", async (req, res) => {
     try {
         const { articleId, authorId, content, parentId } = req.body;
-        // Ensure articleId is int
         const newComment = await pool.query(
             "INSERT INTO article_comments (article_id, author_id, content, parent_id) VALUES($1, $2, $3, $4) RETURNING *",
             [articleId, authorId, content, parentId || null]
@@ -376,7 +447,6 @@ app.get("/wall", async (req, res) => {
         const comments = await pool.query("SELECT * FROM wall_comments ORDER BY created_at ASC");
 
         const formatted = posts.rows.map(p => {
-            // Map comments to client format with flat structure (client will tree-ify)
             const postComments = comments.rows
                 .filter(c => c.post_id === p.id)
                 .map(c => ({
@@ -410,6 +480,15 @@ app.post("/wall", async (req, res) => {
             "INSERT INTO wall_posts (author_id, target_user_id, content) VALUES($1, $2, $3) RETURNING *",
             [authorId, targetUserId, content]
         );
+        
+        // Notify target user if it's not a self-post
+        if (authorId !== targetUserId) {
+            await pool.query(
+                "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'message', 'New wall post from a user.', $2)",
+                [targetUserId, `/profile/${targetUserId}`] // Simplified link
+            );
+        }
+
         res.json(newPost.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -478,10 +557,29 @@ const initDB = async () => {
                 avatar TEXT,
                 banner TEXT,
                 bio TEXT,
+                watchlist TEXT[],
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+
+        // Check for watchlist column if table existed but column didn't
+        try {
+            await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS watchlist TEXT[] DEFAULT '{}'`);
+        } catch (e) { console.log("Watchlist column check skipped or failed", e.message); }
         
+        // Notifications
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                type VARCHAR(50),
+                content TEXT,
+                link TEXT,
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
         // Articles
         await pool.query(`
             CREATE TABLE IF NOT EXISTS articles (

@@ -5,6 +5,17 @@ import { API_URL } from '../constants';
 
 const TEMPLATES: WikiTemplate[] = [
   {
+    name: 'Infobox Character',
+    description: 'Standard character stats (Use at start of article)',
+    content: `{{Infobox
+| name = Name
+| image = File:Image.jpg
+| origin = Series
+| classification = Class
+| age = Age
+}}`
+  },
+  {
     name: 'Frame (Universal Frame)',
     description: 'Custom container with border, icon, and title.',
     content: `{{Frame|title=Title Here|content=Content Here|icon=box|border=#a855f7}}`
@@ -23,17 +34,6 @@ const TEMPLATES: WikiTemplate[] = [
     name: 'IMG2 (Advanced Image)',
     description: 'Use for aligned images: {{IMG2|File:Name.jpg|center|400px}}',
     content: `{{IMG2|File:Name.jpg|right|300px}}`
-  },
-  {
-    name: 'Infobox Character',
-    description: 'Standard character stats',
-    content: `{{Infobox
-| name = Name
-| image = File:Image.jpg
-| origin = Series
-| classification = Class
-| age = Age
-}}`
   }
 ];
 
@@ -97,7 +97,7 @@ interface DataContextType {
   replyToWallPost: (postId: string, parentCommentId: string | null, reply: Comment) => void;
   markNotificationRead: (id: string) => void;
   uploadMedia: (file: MediaItem) => void;
-  toggleWatch: (articleId: string) => void;
+  toggleWatch: (slug: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -112,7 +112,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [threads, setThreads] = useState<ColiseumThread[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [wallPosts, setWallPosts] = useState<WallPost[]>([]);
-  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>(() => JSON.parse(localStorage.getItem('wom_media') || '[]')); 
+  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]); 
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Load ALL public data from Server
@@ -147,6 +147,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setWallPosts(processedWall);
         }
 
+        const mediaRes = await fetch(`${API_URL}/media`);
+        if (mediaRes.ok) setMediaFiles(await mediaRes.json());
+
+        // Fetch Notifications if logged in
+        if (token && currentUser.id !== 'guest') {
+            const noteRes = await fetch(`${API_URL}/notifications/${currentUser.id}`);
+            if (noteRes.ok) setNotifications(await noteRes.json());
+        }
+
     } catch (e) {
         console.error("Failed to load data", e);
     } finally {
@@ -158,7 +167,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchAllData();
     const interval = setInterval(fetchAllData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token, currentUser.id]);
 
   // Verify Token
   useEffect(() => {
@@ -183,7 +192,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     banner: userData.banner || '',
                     bio: userData.bio,
                     joinDate: new Date(userData.created_at).toLocaleDateString(),
-                    watchlist: userData.watchlist || [] // Backend needs to support this
+                    watchlist: userData.watchlist || []
                 };
                 setCurrentUser(mappedUser);
             } else {
@@ -199,7 +208,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyToken();
   }, [token]);
 
-  // Auth functions (login, googleLogin, register, logout)
+  // Auth functions
   const login = async (email: string, pass: string): Promise<boolean> => {
       setIsLoading(true);
       try {
@@ -289,15 +298,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               body: JSON.stringify(data)
           });
           if (res.ok) {
-              setCurrentUser(prev => ({ ...prev, ...data }));
-              setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+              const updated = await res.json();
+              setCurrentUser(prev => ({ ...prev, ...updated }));
+              setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
           }
       } catch (e) {
           console.error("Update failed", e);
       }
   };
 
-  // Content Actions
+  const toggleWatch = async (slug: string) => {
+      if(!currentUser || currentUser.id === 'guest') return;
+      
+      try {
+          const res = await fetch(`${API_URL}/users/${currentUser.id}/watchlist`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug })
+          });
+          if (res.ok) {
+              const data = await res.json();
+              setCurrentUser(prev => ({ ...prev, watchlist: data.watchlist }));
+          }
+      } catch (e) {
+          console.error("Watch toggle failed", e);
+      }
+  };
+
   const addArticle = async (article: Article) => {
     try {
       const response = await fetch(`${API_URL}/articles`, {
@@ -397,28 +424,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) { console.error(e); }
   };
 
-  const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  const uploadMedia = (file: MediaItem) => setMediaFiles(prev => [file, ...prev]);
+  const markNotificationRead = async (id: string) => {
+      try {
+          await fetch(`${API_URL}/notifications/${id}/read`, { method: 'PUT' });
+          setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      } catch(e) { console.error(e); }
+  };
 
-  const toggleWatch = (articleId: string) => {
-      if(!currentUser || currentUser.id === 'guest') return;
-      
-      const currentWatchlist = currentUser.watchlist || [];
-      let newWatchlist = [];
-      if (currentWatchlist.includes(articleId)) {
-          newWatchlist = currentWatchlist.filter(id => id !== articleId);
-      } else {
-          newWatchlist = [...currentWatchlist, articleId];
-      }
-      
-      // Optimistic update
-      setCurrentUser(prev => ({ ...prev, watchlist: newWatchlist }));
-      
-      // Persist to localStorage for now (would be DB call in production)
-      // Since currentUser is reset on reload from /auth/me, this only lasts for session unless DB supports it.
-      // We will pretend the DB supports it via the same user update endpoint if possible, but the DB schema likely needs updates.
-      // For this demo, we'll keep it client-side context state or just simple console log.
-      console.log(`Toggled watch for ${articleId}. New list:`, newWatchlist);
+  const uploadMedia = async (file: MediaItem) => {
+      try {
+          const res = await fetch(`${API_URL}/media`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(file)
+          });
+          if (res.ok) fetchAllData();
+      } catch(e) { console.error(e); }
   };
 
   return (

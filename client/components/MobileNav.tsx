@@ -1,13 +1,13 @@
-
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BookOpen, Swords, MessageSquare, User, Menu, X, Image, HelpCircle, ShieldAlert } from 'lucide-react';
-import { CURRENT_USER } from '../constants';
+import { Home, BookOpen, Swords, MessageSquare, User, Menu, X, Image, HelpCircle, ShieldAlert, Users } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserRole } from '../types';
 
 export const MobileNav: React.FC = () => {
   const [showMenu, setShowMenu] = useState(false);
+  const { currentUser } = useData();
 
   return (
     <>
@@ -64,12 +64,21 @@ export const MobileNav: React.FC = () => {
 
                <div className="p-6 grid grid-cols-2 gap-4">
                   <NavLink 
-                    to={`/profile/${CURRENT_USER.username}`} 
+                    to={`/profile/${currentUser.username}`} 
                     onClick={() => setShowMenu(false)}
                     className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-white/5 hover:border-wom-primary/50 transition-colors"
                   >
                      <User size={24} className="mb-2 text-wom-primary" />
                      <span className="text-sm font-bold text-white">Profile</span>
+                  </NavLink>
+
+                  <NavLink 
+                    to="/users" 
+                    onClick={() => setShowMenu(false)}
+                    className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-white/5 hover:border-wom-primary/50 transition-colors"
+                  >
+                     <Users size={24} className="mb-2 text-yellow-400" />
+                     <span className="text-sm font-bold text-white">Find Users</span>
                   </NavLink>
 
                   <NavLink 
@@ -90,7 +99,7 @@ export const MobileNav: React.FC = () => {
                      <span className="text-sm font-bold text-white">Templates</span>
                   </NavLink>
 
-                   {CURRENT_USER.role !== UserRole.USER && (
+                   {currentUser.role !== UserRole.USER && (
                       <NavLink 
                         to="/admin" 
                         onClick={() => setShowMenu(false)}

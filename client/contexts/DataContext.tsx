@@ -1,20 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Article, ChatMessage, ColiseumThread, Notification, WallPost, UserRole, WikiTemplate, MediaItem, Comment } from '../types';
+import { User, Article, ChatMessage, ColiseumThread, Notification, WallPost, UserRole, WikiTemplate, MediaItem, Comment, FriendRequest, Friendship } from '../types';
 import { API_URL } from '../constants';
 
 const TEMPLATES: WikiTemplate[] = [
-  {
-    name: 'Infobox Character',
-    description: 'Standard character stats (Use at start of article)',
-    content: `{{Infobox
-| name = Name
-| image = File:Image.jpg
-| origin = Series
-| classification = Class
-| age = Age
-}}`
-  },
   {
     name: 'Frame (Universal Frame)',
     description: 'Custom container with border, icon, and title.',
@@ -34,6 +23,17 @@ const TEMPLATES: WikiTemplate[] = [
     name: 'IMG2 (Advanced Image)',
     description: 'Use for aligned images: {{IMG2|File:Name.jpg|center|400px}}',
     content: `{{IMG2|File:Name.jpg|right|300px}}`
+  },
+  {
+    name: 'Infobox Character',
+    description: 'Standard character stats',
+    content: `{{Infobox
+| name = Name
+| image = File:Image.jpg
+| origin = Series
+| classification = Class
+| age = Age
+}}`
   }
 ];
 
@@ -42,8 +42,7 @@ const GUEST_USER: User = {
     username: 'Guest',
     role: UserRole.USER,
     avatar: '', 
-    joinDate: new Date().toLocaleDateString(),
-    watchlist: []
+    joinDate: new Date().toLocaleDateString()
 };
 
 // Helper to build tree from flat comments with parentId
@@ -51,12 +50,10 @@ const buildCommentTree = (flatComments: any[]): Comment[] => {
     const commentMap: Record<string, Comment> = {};
     const roots: Comment[] = [];
 
-    // Init map
     flatComments.forEach(c => {
         commentMap[c.id] = { ...c, replies: [] };
     });
 
-    // Build tree
     flatComments.forEach(c => {
         if (c.parentId && commentMap[c.parentId]) {
             commentMap[c.parentId].replies.push(commentMap[c.id]);
@@ -74,12 +71,17 @@ interface DataContextType {
   users: User[];
   articles: Article[];
   threads: ColiseumThread[];
-  chatMessages: ChatMessage[];
+  // chatMessages removed in favor of activeConversationMessages
+  activeConversationMessages: ChatMessage[];
   wallPosts: WallPost[];
   notifications: Notification[];
   templates: WikiTemplate[];
   mediaFiles: MediaItem[];
   
+  // Friend System
+  friends: Friendship[];
+  friendRequests: FriendRequest[];
+
   login: (email: string, pass: string) => Promise<boolean>;
   googleLogin: (token: string) => Promise<boolean>;
   register: (username: string, email: string, pass: string) => Promise<boolean>;
@@ -92,12 +94,22 @@ interface DataContextType {
   addThreadComment: (threadId: string, comment: Comment) => void;
   addArticleComment: (articleId: string, comment: Comment) => void;
   replyToArticleComment: (articleId: string, parentCommentId: string, reply: Comment) => void;
+  
+  // New Chat Logic
+  setActiveConversation: (roomId: string) => void;
+  activeConversationId: string | null;
   sendMessage: (msg: ChatMessage) => void;
+  
   sendWallPost: (post: WallPost) => void;
   replyToWallPost: (postId: string, parentCommentId: string | null, reply: Comment) => void;
   markNotificationRead: (id: string) => void;
   uploadMedia: (file: MediaItem) => void;
   toggleWatch: (slug: string) => void;
+
+  // Friend Actions
+  sendFriendRequest: (receiverId: string) => void;
+  acceptFriendRequest: (requestId: string) => void;
+  rejectFriendRequest: (requestId: string) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -110,68 +122,65 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [users, setUsers] = useState<User[]>([]);
   const [articles, setArticles] = useState<Article[]>([]); 
   const [threads, setThreads] = useState<ColiseumThread[]>([]);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  
+  // Chat State
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
+  
   const [wallPosts, setWallPosts] = useState<WallPost[]>([]);
-  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]); 
+  const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  
+  // Friends State
+  const [friends, setFriends] = useState<Friendship[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
-  // Load ALL public data from Server
-  const fetchAllData = async () => {
-    try {
-        const usersRes = await fetch(`${API_URL}/users`);
-        if (usersRes.ok) setUsers(await usersRes.json());
-
-        const articlesRes = await fetch(`${API_URL}/articles`);
-        if (articlesRes.ok) {
-            const rawArticles = await articlesRes.json();
-            const processedArticles = rawArticles.map((a: any) => ({
-                ...a,
-                comments: buildCommentTree(a.comments)
-            }));
-            setArticles(processedArticles);
-        }
-
-        const chatRes = await fetch(`${API_URL}/chat`);
-        if (chatRes.ok) setChatMessages(await chatRes.json());
-
-        const threadsRes = await fetch(`${API_URL}/coliseum/threads`);
-        if (threadsRes.ok) setThreads(await threadsRes.json());
-
-        const wallRes = await fetch(`${API_URL}/wall`);
-        if (wallRes.ok) {
-            const rawWall = await wallRes.json();
-            const processedWall = rawWall.map((p: any) => ({
-                ...p,
-                comments: buildCommentTree(p.comments)
-            }));
-            setWallPosts(processedWall);
-        }
-
-        const mediaRes = await fetch(`${API_URL}/media`);
-        if (mediaRes.ok) setMediaFiles(await mediaRes.json());
-
-        // Fetch Notifications if logged in
-        if (token && currentUser.id !== 'guest') {
-            const noteRes = await fetch(`${API_URL}/notifications/${currentUser.id}`);
-            if (noteRes.ok) setNotifications(await noteRes.json());
-        }
-
-    } catch (e) {
-        console.error("Failed to load data", e);
-    } finally {
-        if (!token) setIsLoading(false);
-    }
-  };
-
+  // 1. Initial Data Fetch (Global Data that doesn't change often)
   useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 5000);
-    return () => clearInterval(interval);
-  }, [token, currentUser.id]);
+    const fetchGlobalData = async () => {
+        try {
+            const usersRes = await fetch(`${API_URL}/users`);
+            if (usersRes.ok) setUsers(await usersRes.json());
 
-  // Verify Token
+            const articlesRes = await fetch(`${API_URL}/articles`);
+            if (articlesRes.ok) {
+                const rawArticles = await articlesRes.json();
+                const processedArticles = rawArticles.map((a: any) => ({
+                    ...a,
+                    comments: buildCommentTree(a.comments)
+                }));
+                setArticles(processedArticles);
+            }
+
+            const threadsRes = await fetch(`${API_URL}/coliseum/threads`);
+            if (threadsRes.ok) setThreads(await threadsRes.json());
+
+            const wallRes = await fetch(`${API_URL}/wall`);
+            if (wallRes.ok) {
+                const rawWall = await wallRes.json();
+                const processedWall = rawWall.map((p: any) => ({
+                    ...p,
+                    comments: buildCommentTree(p.comments)
+                }));
+                setWallPosts(processedWall);
+            }
+
+            const mediaRes = await fetch(`${API_URL}/media`);
+            if (mediaRes.ok) setMediaFiles(await mediaRes.json());
+
+        } catch (e) {
+            console.error("Failed to load global data", e);
+        } finally {
+            if (!token) setIsLoading(false);
+        }
+    };
+
+    fetchGlobalData();
+  }, []);
+
+  // 2. Auth & User Specific Data Fetch
   useEffect(() => {
-    const verifyToken = async () => {
+    const verifyAndFetchUserData = async () => {
         if (!token) {
             setCurrentUser(GUEST_USER);
             setIsLoading(false);
@@ -195,6 +204,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     watchlist: userData.watchlist || []
                 };
                 setCurrentUser(mappedUser);
+                
+                // Fetch User Specific Data
+                fetchFriends(mappedUser.id);
+                fetchNotifications(mappedUser.id);
             } else {
                 logout();
             }
@@ -205,10 +218,63 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(false);
         }
     };
-    verifyToken();
+    verifyAndFetchUserData();
   }, [token]);
 
-  // Auth functions
+  // 3. Polling for Active Chat & Notifications (Efficient Polling)
+  useEffect(() => {
+      if (!token || currentUser.id === 'guest') return;
+
+      const poll = async () => {
+          // Poll Active Chat if one is open
+          if (activeConversationId) {
+              const res = await fetch(`${API_URL}/chat/${activeConversationId}`);
+              if (res.ok) setActiveConversationMessages(await res.json());
+          }
+          // Poll Notifications
+          fetchNotifications(currentUser.id);
+          // Poll Friends/Requests (to see status updates or new requests)
+          fetchFriends(currentUser.id);
+      };
+
+      const interval = setInterval(poll, 3000);
+      return () => clearInterval(interval);
+  }, [token, currentUser.id, activeConversationId]);
+
+  // --- Helper Fetchers ---
+
+  const fetchNotifications = async (userId: string) => {
+      const res = await fetch(`${API_URL}/notifications/${userId}`);
+      if (res.ok) setNotifications(await res.json());
+  };
+
+  const fetchFriends = async (userId: string) => {
+      const res = await fetch(`${API_URL}/friends/${userId}`);
+      if (res.ok) {
+          const data = await res.json();
+          // Map friends to include computed roomId
+          const mappedFriends = data.friends.map((f: any) => {
+              // Deterministic Room ID for DMs: min(id1, id2)_max(id1, id2)
+              const ids = [userId, f.friend_id].sort();
+              const roomId = `dm_${ids[0]}_${ids[1]}`;
+              return {
+                  friendId: f.friend_id,
+                  friend: {
+                      id: f.friend_id,
+                      username: f.username,
+                      avatar: f.avatar,
+                      role: f.role,
+                      bio: f.bio
+                  },
+                  roomId: roomId
+              };
+          });
+          setFriends(mappedFriends);
+          setFriendRequests(data.requests);
+      }
+  };
+
+  // --- Auth Functions ---
   const login = async (email: string, pass: string): Promise<boolean> => {
       setIsLoading(true);
       try {
@@ -227,7 +293,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return false;
           }
       } catch (e) {
-          alert("Server error");
           return false;
       } finally {
           setIsLoading(false);
@@ -248,11 +313,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setToken(data.token);
               return true;
           } else {
-              alert(data.error || "Google Login failed");
               return false;
           }
       } catch (e) {
-          alert("Server error during Google Auth");
           return false;
       } finally {
           setIsLoading(false);
@@ -273,11 +336,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setToken(data.token);
               return true;
           } else {
-              alert(data.error || "Registration failed");
+              alert(data.error);
               return false;
           }
       } catch (e) {
-          alert("Server error");
           return false;
       } finally {
           setIsLoading(false);
@@ -288,6 +350,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('wom_token');
       setToken(null);
       setCurrentUser(GUEST_USER);
+      setActiveConversationId(null);
   };
 
   const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }) => {
@@ -302,14 +365,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setCurrentUser(prev => ({ ...prev, ...updated }));
               setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
           }
-      } catch (e) {
-          console.error("Update failed", e);
-      }
+      } catch (e) { console.error(e); }
   };
 
   const toggleWatch = async (slug: string) => {
       if(!currentUser || currentUser.id === 'guest') return;
-      
       try {
           const res = await fetch(`${API_URL}/users/${currentUser.id}/watchlist`, {
               method: 'POST',
@@ -320,10 +380,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const data = await res.json();
               setCurrentUser(prev => ({ ...prev, watchlist: data.watchlist }));
           }
-      } catch (e) {
-          console.error("Watch toggle failed", e);
-      }
+      } catch (e) { console.error(e); }
   };
+
+  // --- Content Creation ---
 
   const addArticle = async (article: Article) => {
     try {
@@ -332,74 +392,88 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(article)
       });
-      if (response.ok) fetchAllData();
+      // We don't fetch all data here to avoid heavy loads, maybe just alert success
     } catch (e) { console.error(e); }
   };
 
   const updateArticle = async (updated: Article) => {
       try {
-        const response = await fetch(`${API_URL}/articles`, {
+        await fetch(`${API_URL}/articles`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updated)
         });
-        if (response.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const addThread = async (thread: ColiseumThread) => {
       try {
-          const res = await fetch(`${API_URL}/coliseum/threads`, {
+          await fetch(`${API_URL}/coliseum/threads`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(thread)
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const addThreadComment = async (threadId: string, comment: Comment) => {
       try {
-          const res = await fetch(`${API_URL}/coliseum/comments`, {
+          await fetch(`${API_URL}/coliseum/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ threadId, authorId: currentUser.id, content: comment.content })
           });
-          if(res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const addArticleComment = async (articleId: string, comment: Comment) => {
       try {
-          const res = await fetch(`${API_URL}/articles/comments`, {
+          await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: comment.content, parentId: null })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const replyToArticleComment = async (articleId: string, parentCommentId: string, reply: Comment) => {
       try {
-          const res = await fetch(`${API_URL}/articles/comments`, {
+          await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
   };
 
   const replyToWallPost = async (postId: string, parentCommentId: string | null, reply: Comment) => {
       try {
-          const res = await fetch(`${API_URL}/wall/comments`, {
+          await fetch(`${API_URL}/wall/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ postId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
-          if (res.ok) fetchAllData();
       } catch (e) { console.error(e); }
+  };
+
+  const sendWallPost = async (post: WallPost) => {
+      try {
+          await fetch(`${API_URL}/wall`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(post)
+          });
+      } catch (e) { console.error(e); }
+  };
+
+  // --- New Chat Functions ---
+
+  const setActiveConversation = (roomId: string) => {
+      setActiveConversationId(roomId);
+      // Immediately fetch for responsiveness
+      fetch(`${API_URL}/chat/${roomId}`)
+        .then(res => res.json())
+        .then(data => setActiveConversationMessages(data));
   };
 
   const sendMessage = async (msg: ChatMessage) => {
@@ -409,18 +483,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(msg)
           });
-          if (res.ok) fetchAllData();
+          if (res.ok) {
+              // Optimistic UI update could happen here, but polling handles it
+              const newMsg = await res.json();
+              setActiveConversationMessages(prev => [...prev, newMsg]);
+          }
       } catch (e) { console.error(e); }
   };
 
-  const sendWallPost = async (post: WallPost) => {
+  // --- Friend Functions ---
+
+  const sendFriendRequest = async (receiverId: string) => {
       try {
-          const res = await fetch(`${API_URL}/wall`, {
+          await fetch(`${API_URL}/friends/request`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(post)
+              body: JSON.stringify({ senderId: currentUser.id, receiverId })
           });
-          if (res.ok) fetchAllData();
+          // Refresh requests
+          fetchFriends(currentUser.id);
+      } catch (e) { console.error(e); }
+  };
+
+  const acceptFriendRequest = async (requestId: string) => {
+      try {
+          await fetch(`${API_URL}/friends/accept`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requestId })
+          });
+          fetchFriends(currentUser.id);
+      } catch (e) { console.error(e); }
+  };
+
+  const rejectFriendRequest = async (requestId: string) => {
+      try {
+          await fetch(`${API_URL}/friends/reject`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requestId })
+          });
+          fetchFriends(currentUser.id);
       } catch (e) { console.error(e); }
   };
 
@@ -438,15 +541,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(file)
           });
-          if (res.ok) fetchAllData();
+          if (res.ok) {
+              const saved = await res.json();
+              setMediaFiles(prev => [saved, ...prev]);
+          }
       } catch(e) { console.error(e); }
   };
 
   return (
     <DataContext.Provider value={{
-      currentUser, isAuthenticated: !!token, isLoading, users, articles, threads, chatMessages, wallPosts, notifications, templates: TEMPLATES, mediaFiles,
+      currentUser, isAuthenticated: !!token, isLoading, users, articles, threads, 
+      activeConversationMessages, wallPosts, notifications, templates: TEMPLATES, mediaFiles,
+      friends, friendRequests,
       login, googleLogin, register, logout, updateUserProfile,
-      addArticle, updateArticle, addThread, addThreadComment, addArticleComment, replyToArticleComment, sendMessage, sendWallPost, replyToWallPost, markNotificationRead, uploadMedia, toggleWatch
+      addArticle, updateArticle, addThread, addThreadComment, addArticleComment, replyToArticleComment, 
+      setActiveConversation, activeConversationId, sendMessage, 
+      sendWallPost, replyToWallPost, markNotificationRead, uploadMedia, toggleWatch,
+      sendFriendRequest, acceptFriendRequest, rejectFriendRequest
     }}>
       {children}
     </DataContext.Provider>

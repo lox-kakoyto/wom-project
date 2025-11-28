@@ -15,6 +15,7 @@ import { TemplateGuide } from './pages/TemplateGuide';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { UserSearch } from './pages/UserSearch';
+import { Friends } from './pages/Friend';
 import { Bell, Search, LogIn } from 'lucide-react';
 import { useData } from './contexts/DataContext';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -112,8 +113,9 @@ const AnimatedRoutes: React.FC = () => {
         <Route path="/editor" element={<PageWrapper><Editor /></PageWrapper>} />
         <Route path="/editor/:slug" element={<PageWrapper><Editor /></PageWrapper>} />
         <Route path="/coliseum" element={<PageWrapper><Coliseum /></PageWrapper>} />
-        <Route path="/chat" element={<PageWrapper><Chat /></PageWrapper>} />
+        {/* Chat route is now primarily for Direct Messages */}
         <Route path="/messages" element={<PageWrapper><Chat /></PageWrapper>} /> 
+        <Route path="/friends" element={<PageWrapper><Friends /></PageWrapper>} />
         <Route path="/profile/:username" element={<PageWrapper><Profile /></PageWrapper>} />
         <Route path="/media" element={<PageWrapper><MediaGallery /></PageWrapper>} />
         <Route path="/templates" element={<PageWrapper><TemplateGuide /></PageWrapper>} />

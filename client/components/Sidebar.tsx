@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BookOpen, Swords, MessageSquare, User, Settings, ShieldAlert, Image, HelpCircle, Users } from 'lucide-react';
+import { Home, BookOpen, Swords, MessageSquare, User, Settings, ShieldAlert, Image, HelpCircle, Users, UserPlus } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
 
@@ -22,7 +22,7 @@ const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string }> = 
 );
 
 export const Sidebar: React.FC = () => {
-  const { currentUser, isAuthenticated } = useData();
+  const { currentUser, isAuthenticated, friendRequests } = useData();
 
   return (
     <aside className="w-64 h-screen bg-wom-bg border-r border-wom-primary/10 flex flex-col fixed left-0 top-0 z-20 hidden md:flex">
@@ -48,11 +48,16 @@ export const Sidebar: React.FC = () => {
         
         <div className="text-xs font-bold text-gray-500 uppercase tracking-wider px-4 mb-2 mt-6">Social</div>
         <NavItem to="/users" icon={<Users size={20} />} label="Find Users" />
-        <NavItem to="/chat" icon={<MessageSquare size={20} />} label="Public Chat" />
         
         {isAuthenticated && (
             <>
-                <NavItem to="/messages" icon={<MessageSquare size={20} />} label="Private Messages" />
+                <NavItem to="/friends" icon={
+                    <div className="relative">
+                        <UserPlus size={20} />
+                        {friendRequests.length > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-wom-accent rounded-full animate-pulse"></span>}
+                    </div>
+                } label="Friends" />
+                <NavItem to="/messages" icon={<MessageSquare size={20} />} label="Messages" />
                 <NavItem to={`/profile/${currentUser.username}`} icon={<User size={20} />} label="My Profile" />
             </>
         )}

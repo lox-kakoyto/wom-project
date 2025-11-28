@@ -23,7 +23,7 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Logger
 app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    // console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
     next();
 });
 
@@ -161,7 +161,7 @@ app.get("/auth/me", async (req, res) => {
 // USERS
 app.get("/users", async (req, res) => {
     try {
-        const allUsers = await pool.query("SELECT * FROM users");
+        const allUsers = await pool.query("SELECT id, username, role, avatar, banner, bio, created_at, watchlist FROM users");
         const formattedUsers = allUsers.rows.map(user => ({
             id: user.id.toString(),
             username: user.username,
@@ -226,6 +226,134 @@ app.post("/users/:id/watchlist", async (req, res) => {
     }
 });
 
+// --- FRIENDS ROUTES ---
+
+// Get Friends & Requests
+app.get("/friends/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Get accepted friendships
+        const friendsQuery = await pool.query(`
+            SELECT f.id, u.id as friend_id, u.username, u.avatar, u.role, u.bio, f.created_at
+            FROM friendships f
+            JOIN users u ON (u.id = f.user_id_1 OR u.id = f.user_id_2)
+            WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1) 
+            AND u.id != $1 
+            AND f.status = 'accepted'
+        `, [userId]);
+
+        // Get pending requests (Incoming)
+        const requestsQuery = await pool.query(`
+            SELECT f.id, u.id as sender_id, u.username, u.avatar
+            FROM friendships f
+            JOIN users u ON u.id = f.user_id_1
+            WHERE f.user_id_2 = $1 AND f.status = 'pending'
+        `, [userId]);
+
+        res.json({
+            friends: friendsQuery.rows,
+            requests: requestsQuery.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send Friend Request
+app.post("/friends/request", async (req, res) => {
+    try {
+        const { senderId, receiverId } = req.body;
+        
+        // Check if exists
+        const check = await pool.query(
+            "SELECT * FROM friendships WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)",
+            [senderId, receiverId]
+        );
+
+        if (check.rows.length > 0) {
+            return res.status(400).json({ error: "Relationship already exists" });
+        }
+
+        const newRequest = await pool.query(
+            "INSERT INTO friendships (user_id_1, user_id_2, status) VALUES ($1, $2, 'pending') RETURNING *",
+            [senderId, receiverId]
+        );
+
+        // Notify Receiver
+        await pool.query(
+            "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'friend_request', 'New friend request', '/friends')",
+            [receiverId]
+        );
+
+        res.json(newRequest.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Accept Request
+app.post("/friends/accept", async (req, res) => {
+    try {
+        const { requestId } = req.body;
+        await pool.query("UPDATE friendships SET status = 'accepted' WHERE id = $1", [requestId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Reject/Delete Request
+app.post("/friends/reject", async (req, res) => {
+    try {
+        const { requestId } = req.body;
+        await pool.query("DELETE FROM friendships WHERE id = $1", [requestId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// --- CHAT ROUTES (OPTIMIZED) ---
+
+// Get Messages for a specific ROOM (Active Chat)
+// This replaces the global dump
+app.get("/chat/:roomId", async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        // Limit to last 50 messages for efficiency
+        const messages = await pool.query(
+            "SELECT * FROM chat_messages WHERE room_id = $1 ORDER BY created_at ASC LIMIT 50",
+            [roomId]
+        );
+        const formatted = messages.rows.map(m => ({
+            id: m.id.toString(),
+            senderId: m.sender_id.toString(),
+            content: m.content,
+            timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            roomId: m.room_id,
+            type: m.type
+        }));
+        res.json(formatted);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post("/chat", async (req, res) => {
+    try {
+        const { senderId, content, roomId, type } = req.body;
+        const newMsg = await pool.query(
+            "INSERT INTO chat_messages (sender_id, content, room_id, type) VALUES($1, $2, $3, $4) RETURNING *",
+            [senderId, content, roomId, type || 'text']
+        );
+        res.json(newMsg.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // NOTIFICATIONS
 app.get("/notifications/:userId", async (req, res) => {
     try {
@@ -258,10 +386,10 @@ app.put("/notifications/:id/read", async (req, res) => {
 });
 
 
-// ARTICLES
+// ARTICLES (Heavy Routes - Keep as is but generally these should be paginated too in future)
 app.get("/articles", async (req, res) => {
     try {
-        const allArticles = await pool.query("SELECT * FROM articles ORDER BY created_at DESC");
+        const allArticles = await pool.query("SELECT id, slug, title, content, category, author_id, image_url, tags, created_at FROM articles ORDER BY created_at DESC");
         const allComments = await pool.query("SELECT * FROM article_comments ORDER BY created_at ASC");
         
         const formattedArticles = allArticles.rows.map(row => {
@@ -310,9 +438,7 @@ app.post("/articles", async (req, res) => {
              result = updated.rows[0];
 
              // --- NOTIFICATION LOGIC ---
-             // Find users watching this slug (using Postgres array operator @>)
              const watchers = await pool.query("SELECT id FROM users WHERE watchlist @> $1", [[slug]]);
-             
              for (const watcher of watchers.rows) {
                  if (watcher.id.toString() !== authorId.toString()) {
                      await pool.query(
@@ -321,8 +447,6 @@ app.post("/articles", async (req, res) => {
                      );
                  }
              }
-             // --------------------------
-
         } else {
              const newArticle = await pool.query(
                 "INSERT INTO articles (slug, title, content, category, author_id, image_url, tags) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING *",
@@ -409,41 +533,11 @@ app.post("/coliseum/comments", async (req, res) => {
     }
 });
 
-// CHAT
-app.get("/chat", async (req, res) => {
-    try {
-        const messages = await pool.query("SELECT * FROM chat_messages ORDER BY created_at ASC LIMIT 100");
-        const formatted = messages.rows.map(m => ({
-            id: m.id.toString(),
-            senderId: m.sender_id.toString(),
-            content: m.content,
-            timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            roomId: m.room_id,
-            type: m.type
-        }));
-        res.json(formatted);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post("/chat", async (req, res) => {
-    try {
-        const { senderId, content, roomId, type } = req.body;
-        const newMsg = await pool.query(
-            "INSERT INTO chat_messages (sender_id, content, room_id, type) VALUES($1, $2, $3, $4) RETURNING *",
-            [senderId, content, roomId, type || 'text']
-        );
-        res.json(newMsg.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // WALL POSTS
 app.get("/wall", async (req, res) => {
     try {
-        const posts = await pool.query("SELECT * FROM wall_posts ORDER BY created_at DESC");
+        // Simple Limit for now to prevent massive payloads
+        const posts = await pool.query("SELECT * FROM wall_posts ORDER BY created_at DESC LIMIT 50");
         const comments = await pool.query("SELECT * FROM wall_comments ORDER BY created_at ASC");
 
         const formatted = posts.rows.map(p => {
@@ -481,11 +575,11 @@ app.post("/wall", async (req, res) => {
             [authorId, targetUserId, content]
         );
         
-        // Notify target user if it's not a self-post
+        // Notify target user
         if (authorId !== targetUserId) {
             await pool.query(
                 "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'message', 'New wall post from a user.', $2)",
-                [targetUserId, `/profile/${targetUserId}`] // Simplified link
+                [targetUserId, `/profile/${targetUserId}`]
             );
         }
 
@@ -511,7 +605,7 @@ app.post("/wall/comments", async (req, res) => {
 // MEDIA ROUTES
 app.get("/media", async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM media_files ORDER BY created_at DESC");
+        const result = await pool.query("SELECT id, filename, url, uploader_id, type, size, created_at FROM media_files ORDER BY created_at DESC");
         const formatted = result.rows.map(m => ({
             id: m.id.toString(),
             filename: m.filename,
@@ -558,6 +652,17 @@ const initDB = async () => {
                 banner TEXT,
                 bio TEXT,
                 watchlist TEXT[],
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+
+        // Friendships
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS friendships (
+                id SERIAL PRIMARY KEY,
+                user_id_1 INTEGER REFERENCES users(id),
+                user_id_2 INTEGER REFERENCES users(id),
+                status VARCHAR(20) DEFAULT 'pending', -- pending, accepted
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
@@ -635,7 +740,7 @@ const initDB = async () => {
                 id SERIAL PRIMARY KEY,
                 sender_id INTEGER REFERENCES users(id),
                 content TEXT NOT NULL,
-                room_id VARCHAR(50) NOT NULL,
+                room_id VARCHAR(100) NOT NULL,
                 type VARCHAR(20) DEFAULT 'text',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

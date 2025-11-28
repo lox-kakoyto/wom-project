@@ -7,13 +7,13 @@ export enum UserRole {
 export interface User {
   id: string;
   username: string;
-  email?: string; // Optional for security on frontend
+  email?: string; 
   role: UserRole;
   avatar: string;
-  banner?: string; // New field
+  banner?: string; 
   bio?: string;
   joinDate: string;
-  watchlist?: string[]; // Array of article IDs or slugs
+  watchlist?: string[]; 
 }
 
 export enum ArticleCategory {
@@ -39,7 +39,7 @@ export interface Comment {
   authorId: string;
   content: string;
   timestamp: string;
-  parentId?: string | null; // For DB mapping
+  parentId?: string | null; 
   replies: Comment[];
 }
 
@@ -72,15 +72,14 @@ export interface ChatMessage {
   senderId: string;
   content: string;
   timestamp: string;
-  roomId?: string; 
-  recipientId?: string; 
+  roomId: string; 
   type: 'text' | 'image' | 'system';
 }
 
 export interface Notification {
   id: string;
   userId: string;
-  type: 'reply' | 'message' | 'system';
+  type: 'reply' | 'message' | 'system' | 'friend_request';
   content: string;
   read: boolean;
   timestamp: string;
@@ -93,11 +92,26 @@ export interface WallPost {
   targetUserId: string;
   content: string;
   timestamp: string;
-  comments: Comment[]; // Added support for replies
+  comments: Comment[]; 
 }
 
 export interface WikiTemplate {
   name: string;
   content: string; 
   description: string;
+}
+
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted';
+  timestamp: string;
+  sender?: User; // Hydrated for UI
+}
+
+export interface Friendship {
+  friendId: string;
+  friend: User;
+  roomId: string; // The DM room ID
 }

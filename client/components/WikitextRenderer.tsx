@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -78,7 +77,7 @@ export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
    SUB-COMPONENTS
    ============================================================================ */
 
-function MarkdownBlock({ text }: { text: string }) {
+const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
     const lines = text.split('\n');
     return (
         <>
@@ -104,7 +103,7 @@ function MarkdownBlock({ text }: { text: string }) {
     )
 }
 
-function TabberComponent({ tabs, mediaFiles }: { tabs: {title: string, content: string}[], mediaFiles: MediaItem[] }) {
+const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], mediaFiles: MediaItem[] }> = ({ tabs, mediaFiles }) => {
     const [activeTab, setActiveTab] = useState(0);
     if (tabs.length === 0) return null;
 
@@ -133,7 +132,7 @@ function TabberComponent({ tabs, mediaFiles }: { tabs: {title: string, content: 
     );
 }
 
-function NavboxComponent({ title, content }: { title: string, content: string }) {
+const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, content }) => {
     const [isOpen, setIsOpen] = useState(true);
 
     return (

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PenTool, Filter, HardDrive, MessageCircle, ArrowRight } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
@@ -202,6 +202,10 @@ const WikiList: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'comments'>('date');
   
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
   const categories = ['All', ...Object.values(ArticleCategory).filter(c => c !== ArticleCategory.TEMPLATE)];
 
   // Filtering and Sorting Logic
@@ -213,6 +217,18 @@ const WikiList: React.FC = () => {
        if (sortBy === 'comments') return b.comments.length - a.comments.length;
        return 0;
     });
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeCategory, sortBy]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(sortedArticles.length / itemsPerPage);
+  const paginatedArticles = sortedArticles.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -254,7 +270,7 @@ const WikiList: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {sortedArticles.map(article => {
+        {paginatedArticles.map(article => {
            // Try to find an image in Infobox if main url is missing
            const infoboxData = parseInfobox(article.content, mediaFiles);
            const displayImg = article.imageUrl || infoboxData?.image || 'https://via.placeholder.com/400x400?text=No+Image';
@@ -282,6 +298,41 @@ const WikiList: React.FC = () => {
            );
         })}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-8">
+            <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-wom-primary/20 hover:border-wom-primary/50 disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:border-white/10 transition-all text-sm font-bold text-white"
+            >
+                Previous
+            </button>
+            <div className="flex gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                   <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`w-10 h-10 rounded-lg font-bold text-sm transition-all border ${
+                            currentPage === p 
+                            ? 'bg-wom-primary border-wom-primary text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]' 
+                            : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                   >
+                       {p}
+                   </button>
+                ))}
+            </div>
+            <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-wom-primary/20 hover:border-wom-primary/50 disabled:opacity-30 disabled:hover:bg-white/5 disabled:hover:border-white/10 transition-all text-sm font-bold text-white"
+            >
+                Next
+            </button>
+        </div>
+      )}
     </div>
   );
 };

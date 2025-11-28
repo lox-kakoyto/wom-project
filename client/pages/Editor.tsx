@@ -33,6 +33,9 @@ export const Editor: React.FC = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<'formatting' | 'inserts' | 'tools'>('formatting');
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Fix: Track if initial data has been loaded to prevent overwriting during polling
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const templateMenuRef = useRef<HTMLDivElement>(null);
@@ -40,9 +43,23 @@ export const Editor: React.FC = () => {
   // Derived state
   const isWatching = (currentUser.watchlist || []).includes(slug || urlSlug);
 
+  // Handle Slug Changes (Reset or Clear)
+  useEffect(() => {
+    setIsDataLoaded(false);
+    if (!slug) {
+        // Clear form if navigating to Create mode
+        setTitle('');
+        setUrlSlug('');
+        setContent('');
+        setCategory(ArticleCategory.CHARACTER);
+        setTags('');
+        setImageUrl('');
+    }
+  }, [slug]);
+
   // Load existing data
   useEffect(() => {
-    if (slug) {
+    if (slug && !isDataLoaded && articles.length > 0) {
       const existing = articles.find(a => a.slug === slug);
       if (existing) {
         setTitle(existing.title);
@@ -51,9 +68,10 @@ export const Editor: React.FC = () => {
         setCategory(existing.category);
         setTags(existing.tags.join(', '));
         setImageUrl(existing.imageUrl || '');
+        setIsDataLoaded(true);
       }
     }
-  }, [slug, articles]);
+  }, [slug, articles, isDataLoaded]);
 
   // Click outside to close templates
   useEffect(() => {

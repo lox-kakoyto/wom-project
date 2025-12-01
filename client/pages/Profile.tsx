@@ -1,8 +1,10 @@
+
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Calendar, Edit3, Camera, Save, X, Reply } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { WallPost, Comment } from '../types';
+import { DEFAULT_AVATAR } from '../constants';
 
 const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }> = ({ comment, postId, depth = 0 }) => {
     const { currentUser, users, replyToWallPost } = useData();
@@ -10,7 +12,7 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
     const [replyText, setReplyText] = useState('');
     
     const author = users.find(u => u.id === comment.authorId) || { username: 'Unknown', avatar: '' };
-    const authorAvatar = author.avatar || 'https://via.placeholder.com/150';
+    const authorAvatar = author.avatar || DEFAULT_AVATAR;
 
     const handleReply = () => {
         if(!replyText.trim()) return;
@@ -26,8 +28,10 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
         setReplyText('');
     };
 
-    // Limit indent to depth 3 to avoid squeeze
-    const indentClass = depth > 0 && depth < 4 ? 'ml-8 md:ml-12 border-l border-white/10 pl-4' : 'mt-3 border-t border-white/5 pt-3';
+    // Prevent recursive shrinking by using fixed padding/margin logic that doesn't infinitely squeeze
+    const indentClass = depth > 0 
+        ? 'ml-4 md:ml-8 border-l border-white/10 pl-3 mt-2' 
+        : 'mt-3 border-t border-white/5 pt-3';
 
     return (
         <div className={`flex gap-3 mb-3 ${indentClass}`}>
@@ -62,7 +66,7 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
                         />
                         <div className="flex justify-end gap-2 mt-2">
                            <button onClick={() => setIsReplying(false)} className="text-[10px] text-gray-400 hover:text-white">Cancel</button>
-                           <button onClick={handleReply} className="px-2 py-1 bg-wom-primary text-white text-[10px] font-bold rounded hover:bg-wom-accent">Post</button>
+                           <button onClick={handleReply} className="px-3 py-1 bg-wom-primary text-white text-[10px] font-bold rounded hover:bg-wom-accent">Post</button>
                         </div>
                      </div>
                  )}
@@ -96,7 +100,19 @@ export const Profile: React.FC = () => {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  const profileUser = users.find(u => u.username === username) || currentUser;
+  // Correctly find the user being viewed, separate from the logged-in user
+  const profileUser = users.find(u => u.username === username);
+  
+  // Fallback for loading state or invalid user
+  if (!profileUser) {
+      // If we are on our own profile link (which redirects to username), this handles it.
+      // But if searching for someone else and they aren't loaded, we should show Loading or Not Found.
+      // For now, if we match nothing and username param is set, it means user not found.
+      if (username) return <div className="text-center p-20 text-gray-500">User "{username}" not found.</div>;
+      // If no username param, we shouldn't be here due to router, but safe fallback to currentUser
+      return null; 
+  }
+
   const isOwner = currentUser.id === profileUser.id && currentUser.id !== 'guest';
 
   const handleWallPost = () => {
@@ -163,7 +179,7 @@ export const Profile: React.FC = () => {
   const userWallPosts = wallPosts.filter(p => p.targetUserId === profileUser.id);
   const userArticles = articles.filter(a => a.authorId === profileUser.id);
 
-  const displayAvatar = profileUser.avatar || 'https://via.placeholder.com/150';
+  const displayAvatar = profileUser.avatar || DEFAULT_AVATAR;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -276,7 +292,7 @@ export const Profile: React.FC = () => {
                   {currentUser.id !== 'guest' && (
                       <div className="flex gap-4 mb-8">
                         {/* Fallback avatar for current user in input */}
-                        <img src={currentUser.avatar || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-full object-cover" alt="Me" />
+                        <img src={currentUser.avatar || DEFAULT_AVATAR} className="w-10 h-10 rounded-full object-cover" alt="Me" />
                         <div className="flex-1">
                             <textarea 
                             className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-wom-primary resize-none" 
@@ -296,7 +312,7 @@ export const Profile: React.FC = () => {
 
                   {userWallPosts.map(post => {
                      const author = users.find(u => u.id === post.authorId) || { username: 'Unknown', avatar: '' };
-                     const authorAvatar = author.avatar || 'https://via.placeholder.com/150';
+                     const authorAvatar = author.avatar || DEFAULT_AVATAR;
                      return (
                         <div key={post.id} className="border-b border-white/5 pb-6 last:border-0">
                            <div className="flex gap-4">

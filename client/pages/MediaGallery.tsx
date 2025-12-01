@@ -11,11 +11,25 @@ export const MediaGallery: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleFile = (file: File) => {
-    // Limit set to 10MB
+    // 1. Size Check
     const MAX_SIZE = 10 * 1024 * 1024; // 10MB in bytes
-
     if (file.size > MAX_SIZE) { 
         alert("File too large. Max 10MB.");
+        return;
+    }
+
+    // 2. Type Check (Strict)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'audio/mpeg', 'audio/wav', 'video/mp4', 'video/webm'];
+    if (!allowedTypes.includes(file.type)) {
+        alert("Invalid file type. Only Images (JPG, PNG, GIF), Audio (MP3), and Video (MP4) are allowed.");
+        return;
+    }
+
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+    // 3. Duplicate Name Check
+    if (mediaFiles.some(m => m.filename === sanitizedName)) {
+        alert("You cannot upload files with this name, it already exists. Please rename your file.");
         return;
     }
 
@@ -29,7 +43,7 @@ export const MediaGallery: React.FC = () => {
 
             const newItem: MediaItem = {
                 id: Date.now().toString(),
-                filename: file.name.replace(/[^a-zA-Z0-9.-]/g, '_'), // Sanitize
+                filename: sanitizedName,
                 url: result,
                 uploaderId: currentUser.id,
                 timestamp: new Date().toLocaleString(),

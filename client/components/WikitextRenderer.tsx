@@ -18,11 +18,45 @@ export function findMediaUrl(filename: string, mediaFiles: MediaItem[]) {
     return found ? found.url : 'https://via.placeholder.com/300?text=File+Not+Found';
 }
 
+/**
+ * Enhanced Argument Parser that respects nested braces {{ }} and brackets [[ ]]
+ * when splitting by pipe character |
+ */
 export function parseArgs(inner: string) {
+    const parts: string[] = [];
+    let currentPart = '';
+    let braceDepth = 0;
+    let bracketDepth = 0;
+
+    for (let i = 0; i < inner.length; i++) {
+        const char = inner[i];
+        
+        if (char === '{' && inner[i+1] === '{') {
+            braceDepth++;
+            currentPart += '{';
+        } else if (char === '}' && inner[i+1] === '}') {
+            braceDepth--;
+            currentPart += '}';
+        } else if (char === '[' && inner[i+1] === '[') {
+            bracketDepth++;
+            currentPart += '[';
+        } else if (char === ']' && inner[i+1] === ']') {
+            bracketDepth--;
+            currentPart += ']';
+        } else if (char === '|' && braceDepth === 0 && bracketDepth === 0) {
+            parts.push(currentPart.trim());
+            currentPart = '';
+            continue;
+        }
+
+        currentPart += char;
+    }
+    if (currentPart) parts.push(currentPart.trim());
+
     const args: Record<string, string> = {};
-    const parts = inner.split('|');
     parts.forEach((part, index) => {
-        if (index === 0) return; 
+        if (index === 0) return; // Template Name
+        
         const eqIndex = part.indexOf('=');
         if (eqIndex > -1) {
             const key = part.substring(0, eqIndex).trim();
@@ -37,15 +71,13 @@ export function parseArgs(inner: string) {
 }
 
 export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
-  // Regex to find Infobox. Uses [\s\S]*? to match across newlines non-greedily.
-  // We try to match {{Infobox ... }}
+  // Regex is fragile for nested, but sufficient for simple infobox extraction at top level
   const match = content.match(/{{Infobox\s*\|?([\s\S]*?)}}/i);
   
   if (!match) return null;
   
   const rawData = match[1];
-  // Split by pipe | but be careful not to split pipes inside internal links [[|]]
-  // Simple approach: split by newline, then look for | char at start or after trim
+  // Basic line split - won't handle multi-line params perfectly but works for standard wiki formatting
   const lines = rawData.split('\n');
   const data: Record<string, string> = {};
   
@@ -82,21 +114,41 @@ const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
     return (
         <>
             {lines.map((line, i) => {
-                if (line.startsWith('# ')) return <h2 key={i} className="text-2xl font-bold text-white border-b-2 border-wom-primary/50 pb-1 mb-4 mt-8 uppercase tracking-wide">{line.replace('# ', '')}</h2>;
-                if (line.includes('**Tier:**')) {
-                    return <div key={i} className="bg-wom-panel border-l-4 border-wom-accent p-2 my-2 text-white">
-                        {line.split('**').map((part, idx) => idx % 2 === 1 ? <b key={idx} className="text-wom-accent">{part}</b> : part)}
-                    </div>;
-                }
+                // Headings
+                if (line.startsWith('== ') && line.endsWith(' ==')) return <h2 key={i} className="text-2xl font-bold text-white border-b-2 border-wom-primary/50 pb-1 mb-4 mt-8 uppercase tracking-wide">{line.replace(/==/g, '').trim()}</h2>;
+                if (line.startsWith('=== ') && line.endsWith(' ===')) return <h3 key={i} className="text-xl font-bold text-wom-accent mb-2 mt-4">{line.replace(/===/g, '').trim()}</h3>;
+                if (line.startsWith('----')) return <hr key={i} className="border-t border-white/20 my-6" />;
+
+                // Process inline formatting (Bold, Italic)
+                // We use a simple splitter for bold (''') and italic ('')
+                // Note: ''' overlaps '', so order matters or use regex replacer
+                
+                const processInline = (str: string) => {
+                    // Replace ''' with <b>
+                    const boldParts = str.split("'''");
+                    const boldProcessed = boldParts.map((part, idx) => {
+                         if (idx % 2 === 1) return <b key={`b-${idx}`} className="text-white font-bold">{part}</b>;
+                         
+                         // Process Italics inside non-bold parts
+                         const italicParts = part.split("''");
+                         return italicParts.map((ip, idx2) => {
+                             if (idx2 % 2 === 1) return <i key={`i-${idx}-${idx2}`} className="text-gray-300 italic">{ip}</i>;
+                             return ip;
+                         });
+                    });
+                    return boldProcessed;
+                };
+
+                if (line.trim() === '') return <br key={i}/>;
+
                 if (line.startsWith('* ')) {
                     return <li key={i} className="ml-4 text-gray-300 list-disc marker:text-wom-primary mb-1">
-                        {line.replace('* ', '').split('**').map((part, idx) => idx % 2 === 1 ? <b key={idx} className="text-white">{part}</b> : part)}
+                        {processInline(line.replace('* ', ''))}
                     </li>
                 }
-                if (line.trim() === '') return <br key={i}/>;
-                
+
                 return <p key={i} className="mb-2 text-gray-300 leading-relaxed text-sm md:text-base">
-                    {line.split('**').map((part, idx) => idx % 2 === 1 ? <b key={idx} className="text-white">{part}</b> : part)}
+                    {processInline(line)}
                 </p>;
             })}
         </>
@@ -125,7 +177,6 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], medi
                 ))}
             </div>
             <div className="p-6 bg-wom-panel/50 min-h-[200px]">
-                {/* Recursion works fine with function declarations */}
                 <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
             </div>
         </div>
@@ -165,37 +216,35 @@ const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, 
 
 export function WikitextRenderer({ content, mediaFiles }: { content: string, mediaFiles: MediaItem[] }) {
   
-  // 1. Remove Top-Level Infobox for main render (it's handled by sidebar usually)
-  // Be robust: replace only the first occurrence if it starts near the top
   let cleanContent = content;
+  // Remove top level infobox only if it looks like standard metadata infobox at start
   const infoboxMatch = content.match(/{{Infobox[\s\S]*?}}/i);
   if (infoboxMatch && infoboxMatch.index !== undefined && infoboxMatch.index < 50) {
-      // Only remove if it's at the start of the article
       cleanContent = content.replace(infoboxMatch[0], '').trim();
   }
 
-  // 2. Advanced Splitter
+  // 2. Advanced Splitter for Templates
   const parts: string[] = [];
   let currentStr = '';
-  let depth = 0;
+  let braceDepth = 0;
 
   for (let i = 0; i < cleanContent.length; i++) {
       const char = cleanContent[i];
       const nextChar = cleanContent[i+1];
 
       if (char === '{' && nextChar === '{') {
-          if (depth === 0 && currentStr) {
+          if (braceDepth === 0 && currentStr) {
               parts.push(currentStr);
               currentStr = '';
           }
-          depth++;
+          braceDepth++;
           currentStr += '{{';
           i++; 
       } else if (char === '}' && nextChar === '}') {
           currentStr += '}}';
-          depth--;
+          braceDepth--;
           i++; 
-          if (depth === 0) {
+          if (braceDepth === 0) {
               parts.push(currentStr);
               currentStr = '';
           }
@@ -210,8 +259,11 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
       {parts.map((part, index) => {
         if (part.startsWith('{{') && part.endsWith('}}')) {
            const inner = part.slice(2, -2);
-           const templateName = inner.split('|')[0].trim();
-           const { args, parts: splitParts } = parseArgs(inner);
+           // We need to robustly find the template name (first arg before pipe)
+           // But the first pipe might be inside a nested template {{Nested|Arg}}
+           // So we use parseArgs logic even for the name extraction if complex
+           const { parts: splitParts, args } = parseArgs(inner);
+           const templateName = splitParts[0].trim();
            
            if (['IMG2', 'SIDE1', 'SIDE2', 'GIF1', 'GIF2'].includes(templateName)) {
                const filename = splitParts[1]?.trim();
@@ -304,10 +356,11 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 const title = args['title'] || splitParts[1] || 'Expand List';
                 const content = args['content'] || splitParts.slice(2).join('|');
                 return (
-                    <details key={index} className="my-2 border-l-2 border-wom-primary/50 pl-2">
+                    <details key={index} className="my-2 border-l-2 border-wom-primary/50 pl-2 group">
                         <summary className="cursor-pointer text-sm font-bold text-wom-primary hover:text-white transition-colors select-none flex items-center gap-1">
                              <ChevronRight size={14} className="transition-transform group-open:rotate-90"/> {title}
                         </summary>
+                        {/* Ensure content inside doesn't shrink or break layout */}
                         <div className="mt-2 text-sm pl-4 text-gray-400">
                              <WikitextRenderer content={content} mediaFiles={mediaFiles} />
                         </div>
@@ -318,24 +371,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
            if (templateName === 'SpoilerText') {
                const text = splitParts[1];
                return <span key={index} className="bg-black text-black hover:bg-transparent hover:text-white transition-colors cursor-help px-1 rounded select-none hover:select-text">{text}</span>;
-           }
-
-           if (templateName === 'MusicBox') {
-               const title = splitParts[1];
-               const filename = splitParts[2];
-               const url = findMediaUrl(filename, mediaFiles);
-               return (
-                   <div key={index} className="my-4 p-3 bg-wom-panel border border-wom-accent/30 rounded-full flex items-center gap-4 shadow-[0_0_15px_rgba(217,70,239,0.2)]">
-                       <div className="w-10 h-10 rounded-full bg-wom-accent flex items-center justify-center text-white shrink-0 animate-pulse">
-                           <Play size={20} fill="currentColor" />
-                       </div>
-                       <div className="flex-1 min-w-0">
-                           <p className="text-xs text-wom-accent font-bold uppercase tracking-wider">Now Playing</p>
-                           <p className="text-white font-bold truncate">{title}</p>
-                       </div>
-                       <audio controls src={url} className="h-8 w-32 md:w-48 opacity-50 hover:opacity-100 transition-opacity" />
-                   </div>
-               );
            }
 
            if (templateName === 'Gallery') {
@@ -356,15 +391,12 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
            }
 
            if (templateName === 'Tabber') {
-               const tabArgs = inner.replace('Tabber\n', '').replace('Tabber', '').split('|');
                const tabs: {title: string, content: string}[] = [];
-               tabArgs.forEach(arg => {
-                   if (!arg.trim()) return;
-                   const firstEq = arg.indexOf('=');
-                   if (firstEq > -1) {
-                       const tTitle = arg.substring(0, firstEq).trim();
-                       const tContent = arg.substring(firstEq + 1).trim();
-                       if(tTitle) tabs.push({ title: tTitle, content: tContent });
+               // Iterate over args, any arg that isn't named might be part of Tabber syntax or we just assume title=content pairs
+               Object.keys(args).forEach(key => {
+                   // Filter out numeric keys if they are just garbage
+                   if (isNaN(parseInt(key))) {
+                       tabs.push({ title: key, content: args[key] });
                    }
                });
                return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} />;
@@ -390,20 +422,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
            
            if (templateName === 'Color') {
                return <span key={index} style={{ color: splitParts[1] }}>{splitParts[2]}</span>;
-           }
-
-           if (templateName === 'Tooltip') {
-               const text = splitParts[1];
-               const tip = splitParts[2];
-               return (
-                   <span key={index} className="group relative border-b border-dotted border-gray-500 cursor-help inline-block">
-                       {text}
-                       <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-black/90 border border-white/20 text-xs text-white rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                           {tip}
-                           <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-black/90 border-r border-b border-white/20 transform rotate-45"></span>
-                       </span>
-                   </span>
-               );
            }
 
            if (templateName === 'BattleResult') {

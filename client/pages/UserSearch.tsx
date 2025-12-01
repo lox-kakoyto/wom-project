@@ -4,14 +4,17 @@ import { Link } from 'react-router-dom';
 import { Search, User, Shield, Zap } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { UserRole } from '../types';
+import { DEFAULT_AVATAR } from '../constants';
 
 export const UserSearch: React.FC = () => {
   const { users } = useData();
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Show all users if search term is empty, or filter if present
+  // Also filter out 'guest' template user
   const filteredUsers = users.filter(u => 
-    u.username.toLowerCase().includes(searchTerm.toLowerCase()) && 
-    u.id !== 'guest' // Hide guest user template
+    u.id !== 'guest' &&
+    (searchTerm === '' || u.username.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -42,7 +45,7 @@ export const UserSearch: React.FC = () => {
                     <div className="relative z-10">
                         <div className="w-24 h-24 rounded-full p-1 border-2 border-wom-primary/30 group-hover:border-wom-accent transition-colors">
                             <img 
-                                src={user.avatar || 'https://via.placeholder.com/150'} 
+                                src={user.avatar || DEFAULT_AVATAR} 
                                 alt={user.username} 
                                 className="w-full h-full rounded-full object-cover"
                             />
@@ -72,7 +75,7 @@ export const UserSearch: React.FC = () => {
         
         {filteredUsers.length === 0 && (
             <div className="col-span-full text-center py-12 text-gray-500">
-                No users found matching "{searchTerm}"
+                No users found.
             </div>
         )}
       </div>

@@ -1,4 +1,3 @@
-
 console.log("--- Starting WOM Server script... ---");
 
 const express = require("express");
@@ -107,7 +106,8 @@ app.post("/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+        // Allow login with email OR username
+        const user = await pool.query("SELECT * FROM users WHERE email = $1 OR username = $1", [email]);
         if (user.rows.length === 0) {
             return res.status(401).json({ error: "Invalid Credentials" });
         }

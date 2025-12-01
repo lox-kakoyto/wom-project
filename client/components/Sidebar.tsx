@@ -69,25 +69,6 @@ export const Sidebar: React.FC = () => {
           </>
         )}
       </nav>
-
-      {isAuthenticated && (
-          <div className="p-4 border-t border-wom-primary/10">
-            <div className="flex items-center gap-3 p-2 rounded-lg bg-wom-panel border border-white/5">
-                {currentUser.avatar ? (
-                    <img src={currentUser.avatar} alt="User" className="w-10 h-10 rounded-full object-cover border border-wom-accent" />
-                ) : (
-                    <div className="w-10 h-10 rounded-full bg-wom-primary/20 flex items-center justify-center text-wom-primary font-bold">
-                        {currentUser.username.charAt(0).toUpperCase()}
-                    </div>
-                )}
-              <div className="overflow-hidden">
-                <p className="text-sm font-bold text-white truncate">{currentUser.username}</p>
-                <p className="text-xs text-wom-primary">{currentUser.role}</p>
-              </div>
-              <Settings size={16} className="ml-auto text-gray-500 hover:text-white cursor-pointer" />
-            </div>
-          </div>
-      )}
     </aside>
   );
 };

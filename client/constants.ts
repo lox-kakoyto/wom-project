@@ -3,6 +3,8 @@ import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 // Using 127.0.0.1 is often more reliable than localhost on Windows to avoid "Failed to fetch" errors
 export const API_URL = 'https://wom-project.onrender.com';
 
+export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; // Placeholder silhouette
+
 export const CURRENT_USER: User = {
   id: 'u1',
   username: 'NeoGlitch',

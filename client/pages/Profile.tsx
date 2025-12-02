@@ -6,7 +6,7 @@ import { useData } from '../contexts/DataContext';
 import { WallPost, Comment } from '../types';
 import { DEFAULT_AVATAR } from '../constants';
 
-const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }> = ({ comment, postId, depth = 0 }) => {
+const WallComment: React.FC<{ comment: Comment, postId: string }> = ({ comment, postId }) => {
     const { currentUser, users, replyToWallPost } = useData();
     const [isReplying, setIsReplying] = useState(false);
     const [replyText, setReplyText] = useState('');
@@ -28,13 +28,8 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
         setReplyText('');
     };
 
-    // Prevent recursive shrinking by using fixed padding/margin logic that doesn't infinitely squeeze
-    const indentClass = depth > 0 
-        ? 'ml-4 md:ml-8 border-l border-white/10 pl-3 mt-2' 
-        : 'mt-3 border-t border-white/5 pt-3';
-
     return (
-        <div className={`flex gap-3 mb-3 ${indentClass}`}>
+        <div className="flex gap-3 mb-3 mt-3 border-t border-white/5 pt-3">
              <div className="shrink-0">
                  <img src={authorAvatar} className="w-6 h-6 rounded-full object-cover" alt="User" />
              </div>
@@ -55,7 +50,7 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
                  )}
 
                  {isReplying && (
-                     <div className="mt-2 animate-fade-in">
+                     <div className="mt-2 animate-fade-in mb-2">
                         <textarea 
                            className="w-full bg-black/30 border border-white/10 rounded p-2 text-xs text-white focus:border-wom-primary outline-none resize-none"
                            rows={2}
@@ -71,12 +66,24 @@ const WallComment: React.FC<{ comment: Comment, postId: string, depth?: number }
                      </div>
                  )}
 
-                 {/* Recursive Replies */}
+                 {/* Flattened Replies (One level deep visual style) */}
                  {comment.replies && comment.replies.length > 0 && (
-                     <div className="mt-2">
-                         {comment.replies.map(reply => (
-                             <WallComment key={reply.id} comment={reply} postId={postId} depth={depth + 1} />
-                         ))}
+                     <div className="mt-2 ml-4 pl-3 border-l border-white/10 space-y-2">
+                         {comment.replies.map(reply => {
+                             const replyAuthor = users.find(u => u.id === reply.authorId) || { username: 'Unknown', avatar: '' };
+                             return (
+                                <div key={reply.id} className="flex gap-2">
+                                     <img src={replyAuthor.avatar || DEFAULT_AVATAR} className="w-5 h-5 rounded-full object-cover" alt="U" />
+                                     <div>
+                                         <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold text-gray-400">{replyAuthor.username}</span>
+                                            <span className="text-[9px] text-gray-700">{reply.timestamp}</span>
+                                         </div>
+                                         <p className="text-[11px] text-gray-500">{reply.content}</p>
+                                     </div>
+                                </div>
+                             )
+                         })}
                      </div>
                  )}
              </div>
@@ -105,11 +112,7 @@ export const Profile: React.FC = () => {
   
   // Fallback for loading state or invalid user
   if (!profileUser) {
-      // If we are on our own profile link (which redirects to username), this handles it.
-      // But if searching for someone else and they aren't loaded, we should show Loading or Not Found.
-      // For now, if we match nothing and username param is set, it means user not found.
       if (username) return <div className="text-center p-20 text-gray-500">User "{username}" not found.</div>;
-      // If no username param, we shouldn't be here due to router, but safe fallback to currentUser
       return null; 
   }
 
@@ -352,11 +355,11 @@ export const Profile: React.FC = () => {
                                 </div>
                            </div>
 
-                           {/* Nested Comments */}
+                           {/* Nested Comments (Flattened Visuals) */}
                            {post.comments && post.comments.length > 0 && (
-                               <div className="mt-4 pl-2">
+                               <div className="pl-2">
                                    {post.comments.map(comment => (
-                                       <WallComment key={comment.id} comment={comment} postId={post.id} depth={1} />
+                                       <WallComment key={comment.id} comment={comment} postId={post.id} />
                                    ))}
                                </div>
                            )}

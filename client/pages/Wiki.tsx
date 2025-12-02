@@ -10,7 +10,7 @@ import { WikitextRenderer, parseInfobox } from '../components/WikitextRenderer';
    MAIN PAGE COMPONENTS
    ============================================================================ */
 
-const SingleComment: React.FC<{ comment: Comment, articleId: string, depth?: number }> = ({ comment, articleId, depth = 0 }) => {
+const SingleComment: React.FC<{ comment: Comment, articleId: string }> = ({ comment, articleId }) => {
     const { currentUser, users, replyToArticleComment } = useData();
     const [isReplying, setIsReplying] = useState(false);
     const [replyText, setReplyText] = useState('');
@@ -31,54 +31,72 @@ const SingleComment: React.FC<{ comment: Comment, articleId: string, depth?: num
         setReplyText('');
     };
 
-    // Cap visual indentation
-    const indentClass = depth > 0 && depth < 4 ? 'ml-8 md:ml-12 border-l-2 border-white/10 pl-4' : 'mt-3 border-t border-white/5 pt-3';
-
     return (
-        <div className={`flex gap-3 mb-4 ${indentClass}`}>
-             <div className="shrink-0">
-                 <img src={author.avatar} className="w-8 h-8 rounded-full object-cover" alt="User" />
-             </div>
-             <div className="flex-1 min-w-0">
-                 <div className="flex items-center gap-2 mb-1">
-                     <span className="font-bold text-wom-text text-sm">{author.username}</span>
-                     <span className="text-xs text-gray-500">{comment.timestamp}</span>
+        <div className="mb-6">
+             {/* Main Comment */}
+             <div className="flex gap-3">
+                 <div className="shrink-0">
+                     <img src={author.avatar} className="w-8 h-8 rounded-full object-cover" alt="User" />
                  </div>
-                 <p className="text-gray-300 text-sm leading-relaxed mb-2">{comment.content}</p>
-                 
-                 <button 
-                     onClick={() => setIsReplying(!isReplying)}
-                     className="text-xs font-bold text-gray-500 hover:text-wom-primary flex items-center gap-1 transition-colors"
-                 >
-                     Reply
-                 </button>
-
-                 {isReplying && (
-                     <div className="mt-2 animate-fade-in">
-                        <textarea 
-                           className="w-full bg-black/30 border border-white/10 rounded p-2 text-sm text-white focus:border-wom-primary outline-none resize-none"
-                           rows={2}
-                           autoFocus
-                           placeholder={`Reply to ${author.username}...`}
-                           value={replyText}
-                           onChange={e => setReplyText(e.target.value)}
-                        />
-                        <div className="flex justify-end gap-2 mt-2">
-                           <button onClick={() => setIsReplying(false)} className="text-xs text-gray-400 hover:text-white">Cancel</button>
-                           <button onClick={handleReply} className="px-3 py-1 bg-wom-primary text-white text-xs font-bold rounded hover:bg-wom-accent">Post Reply</button>
-                        </div>
+                 <div className="flex-1 min-w-0">
+                     <div className="flex items-center gap-2 mb-1">
+                         <span className="font-bold text-wom-text text-sm">{author.username}</span>
+                         <span className="text-xs text-gray-500">{comment.timestamp}</span>
                      </div>
-                 )}
+                     <p className="text-gray-300 text-sm leading-relaxed mb-2">{comment.content}</p>
+                     
+                     <button 
+                         onClick={() => setIsReplying(!isReplying)}
+                         className="text-xs font-bold text-gray-500 hover:text-wom-primary flex items-center gap-1 transition-colors"
+                     >
+                         Reply
+                     </button>
 
-                 {/* Recursive Replies */}
-                 {comment.replies && comment.replies.length > 0 && (
-                     <div className="mt-4">
-                         {comment.replies.map(reply => (
-                             <SingleComment key={reply.id} comment={reply} articleId={articleId} depth={depth + 1} />
-                         ))}
-                     </div>
-                 )}
+                     {isReplying && (
+                         <div className="mt-2 animate-fade-in mb-4">
+                            <textarea 
+                               className="w-full bg-black/30 border border-white/10 rounded p-2 text-sm text-white focus:border-wom-primary outline-none resize-none"
+                               rows={2}
+                               autoFocus
+                               placeholder={`Reply to ${author.username}...`}
+                               value={replyText}
+                               onChange={e => setReplyText(e.target.value)}
+                            />
+                            <div className="flex justify-end gap-2 mt-2">
+                               <button onClick={() => setIsReplying(false)} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+                               <button onClick={handleReply} className="px-3 py-1 bg-wom-primary text-white text-xs font-bold rounded hover:bg-wom-accent">Post Reply</button>
+                            </div>
+                         </div>
+                     )}
+                 </div>
              </div>
+
+             {/* Flattened Replies - Visual Indentation only 1 level deep effectively */}
+             {comment.replies && comment.replies.length > 0 && (
+                 <div className="ml-11 mt-3 space-y-4 border-l-2 border-white/5 pl-4">
+                     {comment.replies.map(reply => {
+                         const replyAuthor = users.find(u => u.id === reply.authorId) || currentUser;
+                         return (
+                             <div key={reply.id} className="flex gap-3">
+                                 <div className="shrink-0">
+                                     <img src={replyAuthor.avatar} className="w-6 h-6 rounded-full object-cover" alt="User" />
+                                 </div>
+                                 <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-bold text-gray-400 text-xs">{replyAuthor.username}</span>
+                                        <span className="text-[10px] text-gray-600">{reply.timestamp}</span>
+                                    </div>
+                                    <p className="text-gray-400 text-xs leading-relaxed">{reply.content}</p>
+                                    
+                                    {/* Recursive replies to replies are just rendered flat here for simplicity in this UI iteration, 
+                                        or you could technically recurse SingleComment but pass a 'flat' prop. 
+                                        For this requirement, we treat 2nd level as leaf nodes visually. */}
+                                 </div>
+                             </div>
+                         );
+                     })}
+                 </div>
+             )}
         </div>
     );
 };

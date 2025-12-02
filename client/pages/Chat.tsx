@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Image as ImageIcon, Smile, MoreVertical, Hash, User } from 'lucide-react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { Send, Image as ImageIcon, Smile, MoreVertical, Hash, User, X } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { ChatMessage } from '../types';
+
+const EMOJIS = ['😀', '😂', '🔥', '❤️', '👍', '👎', '🎉', '💀', '😭', '👀', '🚀', '💯', '🤔', '👋', '✨', '🤬', '🤡', '🤮', '🤝', '🙏'];
 
 export const Chat: React.FC = () => {
   const { 
@@ -15,49 +17,109 @@ export const Chat: React.FC = () => {
   } = useData();
 
   const [inputValue, setInputValue] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [pendingFile, setPendingFile] = useState<{ file: File, preview: string } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Track if we should auto-scroll (e.g., user is at bottom or sent a message)
+  const shouldScrollRef = useRef(true);
 
-  // Auto-scroll on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConversationMessages]);
-
-  const handleSend = () => {
-    if (!inputValue.trim() || !activeConversationId) return;
-    const newMessage: ChatMessage = {
-      id: Date.now().toString(),
-      senderId: currentUser.id,
-      content: inputValue,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      roomId: activeConversationId,
-      type: 'text'
-    };
-    sendMessage(newMessage);
-    setInputValue('');
+  // Check scroll position before updates
+  const handleScroll = () => {
+      if (messagesContainerRef.current) {
+          const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+          // If we are within 50px of the bottom, we should auto-scroll on new messages
+          const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+          shouldScrollRef.current = isAtBottom;
+      }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Scroll effect
+  useLayoutEffect(() => {
+      // If it's the very first load of messages (or empty), scroll to bottom
+      // OR if the user was already at the bottom
+      // OR if the last message is mine
+      const lastMessage = activeConversationMessages[activeConversationMessages.length - 1];
+      const isMine = lastMessage?.senderId === currentUser.id;
+
+      if (shouldScrollRef.current || isMine) {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); 
+          // 'auto' is better than smooth for instant snap on load to prevent weird visual scrolling
+      }
+  }, [activeConversationMessages, currentUser.id]);
+
+  // When switching rooms, reset scroll to bottom
+  useEffect(() => {
+      shouldScrollRef.current = true;
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      setInputValue('');
+      setPendingFile(null);
+      setShowEmoji(false);
+  }, [activeConversationId]);
+
+  const handleSend = async () => {
+    if ((!inputValue.trim() && !pendingFile) || !activeConversationId) return;
+
+    // 1. Send File if exists
+    if (pendingFile) {
+        const fileMsg: ChatMessage = {
+            id: Date.now().toString(),
+            senderId: currentUser.id,
+            content: pendingFile.preview, // Base64
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            roomId: activeConversationId,
+            type: 'image'
+        };
+        sendMessage(fileMsg);
+        setPendingFile(null);
+    }
+
+    // 2. Send Text if exists (as caption or standalone)
+    if (inputValue.trim()) {
+        // Small delay to ensure order if sending both, though not strictly guaranteed without batch API
+        if (pendingFile) await new Promise(r => setTimeout(r, 100)); 
+        
+        const textMsg: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            senderId: currentUser.id,
+            content: inputValue,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            roomId: activeConversationId,
+            type: 'text'
+        };
+        sendMessage(textMsg);
+    }
+
+    setInputValue('');
+    shouldScrollRef.current = true; // Force scroll to bottom after sending
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
      const file = event.target.files?.[0];
-     if (file && activeConversationId) {
+     if (file) {
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File too large (Max 5MB)");
+            return;
+        }
         const reader = new FileReader();
         reader.onload = (e) => {
            const result = e.target?.result as string;
            if (result) {
-              const newMessage: ChatMessage = {
-                 id: Date.now().toString(),
-                 senderId: currentUser.id,
-                 content: result, // Base64 string
-                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                 roomId: activeConversationId,
-                 type: 'image'
-              };
-              sendMessage(newMessage);
+               setPendingFile({ file, preview: result });
            }
         };
         reader.readAsDataURL(file);
      }
+     // Reset input so same file can be selected again if cancelled
      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const addEmoji = (emoji: string) => {
+      setInputValue(prev => prev + emoji);
+      setShowEmoji(false);
   };
 
   const currentFriend = friends.find(f => f.roomId === activeConversationId);
@@ -112,7 +174,11 @@ export const Chat: React.FC = () => {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                <div 
+                    ref={messagesContainerRef}
+                    onScroll={handleScroll}
+                    className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar"
+                >
                 {activeConversationMessages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-gray-500 opacity-50">
                         <img src={currentFriend?.friend.avatar} className="w-20 h-20 rounded-full mb-4 grayscale opacity-50" />
@@ -151,28 +217,74 @@ export const Chat: React.FC = () => {
                 <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="p-4 bg-black/40 border-t border-white/5">
-                <div className="flex items-center gap-2 bg-[#383a40] p-2 rounded-xl border border-transparent focus-within:border-wom-primary/50 transition-colors">
-                    <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    ref={fileInputRef} 
-                    onChange={handleFileUpload} 
-                    />
-                    <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-white transition-colors"><ImageIcon size={20} /></button>
-                    <input 
-                    type="text" 
-                    className="flex-1 bg-transparent text-white placeholder-gray-500 focus:outline-none px-2 font-medium"
-                    placeholder={`Message @${currentFriend?.friend.username || 'user'}...`}
-                    value={inputValue}
-                    onChange={e => setInputValue(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    />
-                    <button className="p-2 text-gray-400 hover:text-white transition-colors"><Smile size={20} /></button>
-                    <button onClick={handleSend} className="p-2 bg-wom-primary text-white rounded-lg hover:bg-wom-accent transition-colors"><Send size={18} /></button>
-                </div>
+                {/* Input Area */}
+                <div className="p-4 bg-black/40 border-t border-white/5 relative">
+                    {/* Emoji Picker Popover */}
+                    {showEmoji && (
+                        <div className="absolute bottom-full mb-2 left-4 bg-wom-panel border border-white/10 rounded-xl p-3 shadow-xl grid grid-cols-5 gap-2 z-50">
+                            {EMOJIS.map(e => (
+                                <button key={e} onClick={() => addEmoji(e)} className="text-2xl hover:bg-white/10 rounded p-1 transition-colors">
+                                    {e}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Staging Area (File Preview) */}
+                    {pendingFile && (
+                        <div className="absolute bottom-full mb-2 left-4 bg-[#2b2d31] border border-white/10 rounded-xl p-2 shadow-xl flex items-center gap-3 animate-fade-in z-40">
+                            <div className="relative h-20 w-20 rounded-lg overflow-hidden border border-white/10 bg-black">
+                                <img src={pendingFile.preview} className="w-full h-full object-cover" alt="Preview" />
+                            </div>
+                            <div className="flex flex-col gap-1 mr-4">
+                                <span className="text-xs text-white font-bold max-w-[150px] truncate">{pendingFile.file.name}</span>
+                                <span className="text-[10px] text-gray-400">{(pendingFile.file.size / 1024).toFixed(1)} KB</span>
+                            </div>
+                            <button 
+                                onClick={() => setPendingFile(null)}
+                                className="p-1 hover:bg-white/10 rounded-full text-gray-400 hover:text-white"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-2 bg-[#383a40] p-2 rounded-xl border border-transparent focus-within:border-wom-primary/50 transition-colors">
+                        <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        ref={fileInputRef} 
+                        onChange={handleFileSelect} 
+                        />
+                        <button onClick={() => fileInputRef.current?.click()} className={`p-2 transition-colors ${pendingFile ? 'text-wom-accent' : 'text-gray-400 hover:text-white'}`}>
+                            <ImageIcon size={20} />
+                        </button>
+                        
+                        <input 
+                            type="text" 
+                            className="flex-1 bg-transparent text-white placeholder-gray-500 focus:outline-none px-2 font-medium"
+                            placeholder={pendingFile ? "Add a caption..." : `Message @${currentFriend?.friend.username || 'user'}...`}
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        />
+                        
+                        <button 
+                            onClick={() => setShowEmoji(!showEmoji)} 
+                            className={`p-2 transition-colors ${showEmoji ? 'text-wom-accent' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <Smile size={20} />
+                        </button>
+                        
+                        <button 
+                            onClick={handleSend} 
+                            disabled={!inputValue.trim() && !pendingFile}
+                            className="p-2 bg-wom-primary text-white rounded-lg hover:bg-wom-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Send size={18} />
+                        </button>
+                    </div>
                 </div>
             </>
         ) : (

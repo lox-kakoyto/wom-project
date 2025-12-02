@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, Article, ChatMessage, ColiseumThread, Notification, WallPost, UserRole, WikiTemplate, MediaItem, Comment, FriendRequest, Friendship } from '../types';
 import { API_URL } from '../constants';
 
@@ -50,11 +50,14 @@ const buildCommentTree = (flatComments: any[]): Comment[] => {
     const commentMap: Record<string, Comment> = {};
     const roots: Comment[] = [];
 
-    flatComments.forEach(c => {
-        commentMap[c.id] = { ...c, replies: [] };
+    // Deep copy to avoid reference issues
+    const comments = flatComments.map(c => ({...c, replies: []}));
+
+    comments.forEach(c => {
+        commentMap[c.id] = c;
     });
 
-    flatComments.forEach(c => {
+    comments.forEach(c => {
         if (c.parentId && commentMap[c.parentId]) {
             commentMap[c.parentId].replies.push(commentMap[c.id]);
         } else {
@@ -71,7 +74,6 @@ interface DataContextType {
   users: User[];
   articles: Article[];
   threads: ColiseumThread[];
-  // chatMessages removed in favor of activeConversationMessages
   activeConversationMessages: ChatMessage[];
   wallPosts: WallPost[];
   notifications: Notification[];
@@ -110,6 +112,9 @@ interface DataContextType {
   sendFriendRequest: (receiverId: string) => void;
   acceptFriendRequest: (requestId: string) => void;
   rejectFriendRequest: (requestId: string) => void;
+  
+  // Refreshers
+  refreshArticles: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -135,35 +140,71 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
-  // 1. Initial Data Fetch (Global Data that doesn't change often)
+  // --- DATA FETCHING HELPERS ---
+
+  const refreshArticles = useCallback(async () => {
+    try {
+        const articlesRes = await fetch(`${API_URL}/articles`);
+        if (articlesRes.ok) {
+            const rawArticles = await articlesRes.json();
+            const processedArticles = rawArticles.map((a: any) => ({
+                ...a,
+                comments: buildCommentTree(a.comments)
+            }));
+            setArticles(processedArticles);
+        }
+    } catch (e) { console.error("Error fetching articles", e); }
+  }, []);
+
+  const refreshWall = useCallback(async () => {
+      try {
+        const wallRes = await fetch(`${API_URL}/wall`);
+        if (wallRes.ok) {
+            const rawWall = await wallRes.json();
+            const processedWall = rawWall.map((p: any) => ({
+                ...p,
+                comments: buildCommentTree(p.comments)
+            }));
+            setWallPosts(processedWall);
+        }
+      } catch (e) { console.error(e); }
+  }, []);
+
+  const refreshThreads = useCallback(async () => {
+      try {
+        const threadsRes = await fetch(`${API_URL}/coliseum/threads`);
+        if (threadsRes.ok) setThreads(await threadsRes.json());
+      } catch (e) { console.error(e); }
+  }, []);
+
+  const refreshChat = useCallback(async (roomId: string) => {
+      try {
+        const res = await fetch(`${API_URL}/chat/${roomId}`);
+        if (res.ok) {
+            const msgs = await res.json();
+            setActiveConversationMessages(prev => {
+                // Only update if length changed to prevent jitter, 
+                // but for simple polling we just replace. 
+                // React handles diffing well enough for small lists.
+                if (prev.length !== msgs.length) return msgs;
+                // Check last message ID
+                if (prev.length > 0 && msgs.length > 0 && prev[prev.length-1].id !== msgs[msgs.length-1].id) return msgs;
+                return prev;
+            });
+        }
+      } catch (e) { console.error(e); }
+  }, []);
+
+  // 1. Initial Data Fetch (Split for performance)
   useEffect(() => {
-    const fetchGlobalData = async () => {
+    const initData = async () => {
         try {
             const usersRes = await fetch(`${API_URL}/users`);
             if (usersRes.ok) setUsers(await usersRes.json());
 
-            const articlesRes = await fetch(`${API_URL}/articles`);
-            if (articlesRes.ok) {
-                const rawArticles = await articlesRes.json();
-                const processedArticles = rawArticles.map((a: any) => ({
-                    ...a,
-                    comments: buildCommentTree(a.comments)
-                }));
-                setArticles(processedArticles);
-            }
-
-            const threadsRes = await fetch(`${API_URL}/coliseum/threads`);
-            if (threadsRes.ok) setThreads(await threadsRes.json());
-
-            const wallRes = await fetch(`${API_URL}/wall`);
-            if (wallRes.ok) {
-                const rawWall = await wallRes.json();
-                const processedWall = rawWall.map((p: any) => ({
-                    ...p,
-                    comments: buildCommentTree(p.comments)
-                }));
-                setWallPosts(processedWall);
-            }
+            await refreshArticles();
+            await refreshThreads();
+            await refreshWall();
 
             const mediaRes = await fetch(`${API_URL}/media`);
             if (mediaRes.ok) setMediaFiles(await mediaRes.json());
@@ -175,8 +216,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    fetchGlobalData();
-  }, []);
+    initData();
+  }, [refreshArticles, refreshThreads, refreshWall]);
 
   // 2. Auth & User Specific Data Fetch
   useEffect(() => {
@@ -221,57 +262,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyAndFetchUserData();
   }, [token]);
 
-  // 3. Polling for Active Chat & Notifications (Efficient Polling)
+  // 3. Polling (Optimized)
   useEffect(() => {
       if (!token || currentUser.id === 'guest') return;
 
       const poll = async () => {
           // Poll Active Chat if one is open
           if (activeConversationId) {
-              const res = await fetch(`${API_URL}/chat/${activeConversationId}`);
-              if (res.ok) setActiveConversationMessages(await res.json());
+              await refreshChat(activeConversationId);
           }
-          // Poll Notifications
+          // Poll Notifications (background)
           fetchNotifications(currentUser.id);
-          // Poll Friends/Requests (to see status updates or new requests)
-          fetchFriends(currentUser.id);
       };
 
       const interval = setInterval(poll, 3000);
       return () => clearInterval(interval);
-  }, [token, currentUser.id, activeConversationId]);
+  }, [token, currentUser.id, activeConversationId, refreshChat]);
 
   // --- Helper Fetchers ---
 
   const fetchNotifications = async (userId: string) => {
-      const res = await fetch(`${API_URL}/notifications/${userId}`);
-      if (res.ok) setNotifications(await res.json());
+      try {
+        const res = await fetch(`${API_URL}/notifications/${userId}`);
+        if (res.ok) setNotifications(await res.json());
+      } catch (e) { console.error(e); }
   };
 
   const fetchFriends = async (userId: string) => {
-      const res = await fetch(`${API_URL}/friends/${userId}`);
-      if (res.ok) {
-          const data = await res.json();
-          // Map friends to include computed roomId
-          const mappedFriends = data.friends.map((f: any) => {
-              // Deterministic Room ID for DMs: min(id1, id2)_max(id1, id2)
-              const ids = [userId, f.friend_id].sort();
-              const roomId = `dm_${ids[0]}_${ids[1]}`;
-              return {
-                  friendId: f.friend_id,
-                  friend: {
-                      id: f.friend_id,
-                      username: f.username,
-                      avatar: f.avatar,
-                      role: f.role,
-                      bio: f.bio
-                  },
-                  roomId: roomId
-              };
-          });
-          setFriends(mappedFriends);
-          setFriendRequests(data.requests);
-      }
+      try {
+        const res = await fetch(`${API_URL}/friends/${userId}`);
+        if (res.ok) {
+            const data = await res.json();
+            const mappedFriends = data.friends.map((f: any) => {
+                const ids = [userId, f.friend_id].sort();
+                const roomId = `dm_${ids[0]}_${ids[1]}`;
+                return {
+                    friendId: f.friend_id,
+                    friend: {
+                        id: f.friend_id,
+                        username: f.username,
+                        avatar: f.avatar,
+                        role: f.role,
+                        bio: f.bio
+                    },
+                    roomId: roomId
+                };
+            });
+            setFriends(mappedFriends);
+            setFriendRequests(data.requests);
+        }
+      } catch (e) { console.error(e); }
   };
 
   // --- Auth Functions ---
@@ -354,45 +394,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }) => {
+      // Optimistic update
+      setCurrentUser(prev => ({ ...prev, ...data }));
       try {
-          const res = await fetch(`${API_URL}/users/${id}`, {
+          await fetch(`${API_URL}/users/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(data)
           });
-          if (res.ok) {
-              const updated = await res.json();
-              setCurrentUser(prev => ({ ...prev, ...updated }));
-              setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updated } : u));
-          }
       } catch (e) { console.error(e); }
   };
 
   const toggleWatch = async (slug: string) => {
       if(!currentUser || currentUser.id === 'guest') return;
+      // Optimistic
+      const isWatching = currentUser.watchlist?.includes(slug);
+      const newWatchlist = isWatching 
+         ? currentUser.watchlist?.filter(s => s !== slug) 
+         : [...(currentUser.watchlist || []), slug];
+         
+      setCurrentUser(prev => ({ ...prev, watchlist: newWatchlist }));
+
       try {
-          const res = await fetch(`${API_URL}/users/${currentUser.id}/watchlist`, {
+          await fetch(`${API_URL}/users/${currentUser.id}/watchlist`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ slug })
           });
-          if (res.ok) {
-              const data = await res.json();
-              setCurrentUser(prev => ({ ...prev, watchlist: data.watchlist }));
-          }
       } catch (e) { console.error(e); }
   };
 
   // --- Content Creation ---
 
   const addArticle = async (article: Article) => {
+    // Add locally for feel, though article ID might need sync. 
+    // Ideally we wait for server for Articles as they are heavy.
     try {
-      const response = await fetch(`${API_URL}/articles`, {
+      await fetch(`${API_URL}/articles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(article)
       });
-      // We don't fetch all data here to avoid heavy loads, maybe just alert success
+      refreshArticles();
     } catch (e) { console.error(e); }
   };
 
@@ -403,6 +446,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updated)
         });
+        refreshArticles();
       } catch (e) { console.error(e); }
   };
 
@@ -413,56 +457,85 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(thread)
           });
+          refreshThreads();
       } catch (e) { console.error(e); }
   };
 
   const addThreadComment = async (threadId: string, comment: Comment) => {
+      // Optimistic UI update
+      setThreads(prev => prev.map(t => {
+          if (t.id === threadId) {
+              return { ...t, comments: [...t.comments, comment] };
+          }
+          return t;
+      }));
+      
       try {
           await fetch(`${API_URL}/coliseum/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ threadId, authorId: currentUser.id, content: comment.content })
           });
+          // Background refresh to get ID
+          refreshThreads();
       } catch (e) { console.error(e); }
   };
 
   const addArticleComment = async (articleId: string, comment: Comment) => {
+      // Optimistic
+      setArticles(prev => prev.map(a => {
+          if (a.id === articleId) {
+              return { ...a, comments: [...a.comments, comment] };
+          }
+          return a;
+      }));
+
       try {
           await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: comment.content, parentId: null })
           });
+          refreshArticles();
       } catch (e) { console.error(e); }
   };
 
   const replyToArticleComment = async (articleId: string, parentCommentId: string, reply: Comment) => {
+      // Optimistic tree update is complex, we'll just wait for refresh or do a simple push
+      // Doing simple refresh for complex trees
       try {
           await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ articleId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
+          refreshArticles();
       } catch (e) { console.error(e); }
   };
 
   const replyToWallPost = async (postId: string, parentCommentId: string | null, reply: Comment) => {
+      // Optimistic
       try {
           await fetch(`${API_URL}/wall/comments`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ postId, authorId: currentUser.id, content: reply.content, parentId: parentCommentId })
           });
+          refreshWall();
       } catch (e) { console.error(e); }
   };
 
   const sendWallPost = async (post: WallPost) => {
+      // Optimistic
+      setWallPosts(prev => [post, ...prev]);
+
       try {
           await fetch(`${API_URL}/wall`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(post)
           });
+          refreshWall();
       } catch (e) { console.error(e); }
   };
 
@@ -470,13 +543,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setActiveConversation = (roomId: string) => {
       setActiveConversationId(roomId);
-      // Immediately fetch for responsiveness
-      fetch(`${API_URL}/chat/${roomId}`)
-        .then(res => res.json())
-        .then(data => setActiveConversationMessages(data));
+      // Immediately fetch
+      refreshChat(roomId);
   };
 
   const sendMessage = async (msg: ChatMessage) => {
+      // Optimistic Update
+      setActiveConversationMessages(prev => [...prev, msg]);
+      
       try {
           const res = await fetch(`${API_URL}/chat`, {
               method: 'POST',
@@ -484,9 +558,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               body: JSON.stringify(msg)
           });
           if (res.ok) {
-              // Optimistic UI update could happen here, but polling handles it
-              const newMsg = await res.json();
-              setActiveConversationMessages(prev => [...prev, newMsg]);
+              const savedMsg = await res.json();
+              // Replace optimistic msg with real one (updates timestamp/ID)
+              setActiveConversationMessages(prev => prev.map(m => m.id === msg.id ? savedMsg : m));
           }
       } catch (e) { console.error(e); }
   };
@@ -500,7 +574,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ senderId: currentUser.id, receiverId })
           });
-          // Refresh requests
           fetchFriends(currentUser.id);
       } catch (e) { console.error(e); }
   };
@@ -528,13 +601,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const markNotificationRead = async (id: string) => {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       try {
           await fetch(`${API_URL}/notifications/${id}/read`, { method: 'PUT' });
-          setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       } catch(e) { console.error(e); }
   };
 
   const uploadMedia = async (file: MediaItem) => {
+      // Optimistic
+      setMediaFiles(prev => [file, ...prev]);
       try {
           const res = await fetch(`${API_URL}/media`, {
               method: 'POST',
@@ -543,7 +618,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           if (res.ok) {
               const saved = await res.json();
-              setMediaFiles(prev => [saved, ...prev]);
+              setMediaFiles(prev => prev.map(m => m.id === file.id ? saved : m));
           }
       } catch(e) { console.error(e); }
   };
@@ -557,7 +632,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addArticle, updateArticle, addThread, addThreadComment, addArticleComment, replyToArticleComment, 
       setActiveConversation, activeConversationId, sendMessage, 
       sendWallPost, replyToWallPost, markNotificationRead, uploadMedia, toggleWatch,
-      sendFriendRequest, acceptFriendRequest, rejectFriendRequest
+      sendFriendRequest, acceptFriendRequest, rejectFriendRequest,
+      refreshArticles
     }}>
       {children}
     </DataContext.Provider>

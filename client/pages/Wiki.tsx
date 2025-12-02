@@ -87,10 +87,6 @@ const SingleComment: React.FC<{ comment: Comment, articleId: string }> = ({ comm
                                         <span className="text-[10px] text-gray-600">{reply.timestamp}</span>
                                     </div>
                                     <p className="text-gray-400 text-xs leading-relaxed">{reply.content}</p>
-                                    
-                                    {/* Recursive replies to replies are just rendered flat here for simplicity in this UI iteration, 
-                                        or you could technically recurse SingleComment but pass a 'flat' prop. 
-                                        For this requirement, we treat 2nd level as leaf nodes visually. */}
                                  </div>
                              </div>
                          );
@@ -119,7 +115,7 @@ const CommentSection: React.FC<{ articleId: string, comments: Comment[] }> = ({ 
    };
 
    return (
-      <div className="mt-12 pt-8 border-t border-white/10">
+      <div className="mt-12 pt-8 border-t border-white/10 clear-both">
          <h3 className="text-2xl font-bold text-white mb-6">Comments ({comments.length})</h3>
          
          <div className="bg-wom-panel border border-white/10 rounded-xl p-4 mb-8">

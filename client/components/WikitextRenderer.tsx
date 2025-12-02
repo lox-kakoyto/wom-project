@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ChevronRight, AlertTriangle, Play, HelpCircle, CheckCircle, XCircle, 
-  Box, Shield, Zap, Skull, Crown, Info, ChevronUp, ChevronDown 
+  Box, Shield, Zap, Skull, Crown, Info, ChevronUp, ChevronDown, 
+  Maximize, Minimize2, Image as ImageIcon
 } from 'lucide-react';
 import { MediaItem } from '../types';
 
@@ -19,8 +20,7 @@ export function findMediaUrl(filename: string, mediaFiles: MediaItem[]) {
 }
 
 /**
- * Enhanced Argument Parser that respects nested braces {{ }} and brackets [[ ]]
- * when splitting by pipe character |
+ * Robust Argument Parser that respects nested braces {{ }} and brackets [[ ]]
  */
 export function parseArgs(inner: string) {
     const parts: string[] = [];
@@ -70,73 +70,83 @@ export function parseArgs(inner: string) {
     return { parts, args };
 }
 
-export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
-  // Regex is fragile for nested, but sufficient for simple infobox extraction at top level
-  const match = content.match(/{{Infobox\s*\|?([\s\S]*?)}}/i);
-  
-  if (!match) return null;
-  
-  const rawData = match[1];
-  // Basic line split - won't handle multi-line params perfectly but works for standard wiki formatting
-  const lines = rawData.split('\n');
-  const data: Record<string, string> = {};
-  
-  lines.forEach(line => {
-    let cleanLine = line.trim();
-    if (cleanLine.startsWith('|')) cleanLine = cleanLine.substring(1).trim();
-    
-    const eqIndex = cleanLine.indexOf('=');
-    if (eqIndex > -1) {
-        const key = cleanLine.substring(0, eqIndex).trim();
-        let val = cleanLine.substring(eqIndex + 1).trim();
-        
-        if (key && val) {
-            if (key.toLowerCase() === 'image' && val.includes('File:')) {
-                // Strip [[ ]] if present
-                val = val.replace(/[[\]]/g, '');
-                val = findMediaUrl(val, mediaFiles);
-            }
-            data[key] = val;
+/**
+ * Extracts a balanced template from a string start
+ */
+function extractBalancedTemplate(str: string, startIndex: number): string | null {
+    let depth = 0;
+    for (let i = startIndex; i < str.length; i++) {
+        if (str[i] === '{' && str[i+1] === '{') {
+            depth++;
+            i++;
+        } else if (str[i] === '}' && str[i+1] === '}') {
+            depth--;
+            i++;
+            if (depth === 0) return str.substring(startIndex, i + 1);
         }
     }
-  });
+    return null;
+}
+
+export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
+  const infoboxStart = content.indexOf('{{Infobox');
+  if (infoboxStart === -1) return null;
+
+  const fullTemplate = extractBalancedTemplate(content, infoboxStart);
+  if (!fullTemplate) return null;
+
+  const inner = fullTemplate.slice(9, -2); // Remove {{Infobox and }}
+  const { args } = parseArgs(inner);
   
-  if (Object.keys(data).length === 0) return null;
-  return data;
+  // Clean up image url
+  if (args['image']) {
+     let val = args['image'];
+     val = val.replace(/[[\]]/g, '');
+     args['image'] = findMediaUrl(val, mediaFiles);
+  }
+
+  return Object.keys(args).length > 0 ? args : null;
 }
 
 /* ============================================================================
    SUB-COMPONENTS
    ============================================================================ */
 
-const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
+const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ text, mediaFiles }) => {
     const lines = text.split('\n');
     return (
         <>
             {lines.map((line, i) => {
-                // Headings
-                if (line.startsWith('== ') && line.endsWith(' ==')) return <h2 key={i} className="text-2xl font-bold text-white border-b-2 border-wom-primary/50 pb-1 mb-4 mt-8 uppercase tracking-wide">{line.replace(/==/g, '').trim()}</h2>;
-                if (line.startsWith('=== ') && line.endsWith(' ===')) return <h3 key={i} className="text-xl font-bold text-wom-accent mb-2 mt-4">{line.replace(/===/g, '').trim()}</h3>;
-                if (line.startsWith('----')) return <hr key={i} className="border-t border-white/20 my-6" />;
+                if (line.startsWith('== ') && line.endsWith(' ==')) return <h2 key={i} className="text-2xl font-bold text-white border-b-2 border-wom-primary/50 pb-1 mb-4 mt-8 uppercase tracking-wide clear-both">{line.replace(/==/g, '').trim()}</h2>;
+                if (line.startsWith('=== ') && line.endsWith(' ===')) return <h3 key={i} className="text-xl font-bold text-wom-accent mb-2 mt-4 clear-both">{line.replace(/===/g, '').trim()}</h3>;
+                if (line.startsWith('----')) return <hr key={i} className="border-t border-white/20 my-6 clear-both" />;
 
-                // Process inline formatting (Bold, Italic)
-                // We use a simple splitter for bold (''') and italic ('')
-                // Note: ''' overlaps '', so order matters or use regex replacer
-                
                 const processInline = (str: string) => {
-                    // Replace ''' with <b>
+                    // Bold
                     const boldParts = str.split("'''");
-                    const boldProcessed = boldParts.map((part, idx) => {
+                    return boldParts.map((part, idx) => {
                          if (idx % 2 === 1) return <b key={`b-${idx}`} className="text-white font-bold">{part}</b>;
-                         
-                         // Process Italics inside non-bold parts
+                         // Italics
                          const italicParts = part.split("''");
                          return italicParts.map((ip, idx2) => {
                              if (idx2 % 2 === 1) return <i key={`i-${idx}-${idx2}`} className="text-gray-300 italic">{ip}</i>;
-                             return ip;
+                             // Links [[Page]] or [[Page|Text]]
+                             const linkParts = ip.split(/(\[\[.*?\]\])/g);
+                             return linkParts.map((lp, idx3) => {
+                                 if (lp.startsWith('[[') && lp.endsWith(']]')) {
+                                     const content = lp.slice(2, -2);
+                                     const [target, label] = content.split('|');
+                                     if(target.startsWith('File:')) return null; // Skip raw images in text
+                                     return (
+                                         <Link key={idx3} to={`/wiki/${target.toLowerCase().replace(/ /g, '-')}`} className="text-wom-primary hover:text-white hover:underline transition-colors">
+                                             {label || target}
+                                         </Link>
+                                     );
+                                 }
+                                 return lp;
+                             });
                          });
                     });
-                    return boldProcessed;
                 };
 
                 if (line.trim() === '') return <br key={i}/>;
@@ -155,13 +165,13 @@ const MarkdownBlock: React.FC<{ text: string }> = ({ text }) => {
     )
 }
 
-const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], mediaFiles: MediaItem[] }> = ({ tabs, mediaFiles }) => {
+const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], mediaFiles: MediaItem[], width?: string, height?: string }> = ({ tabs, mediaFiles, width, height }) => {
     const [activeTab, setActiveTab] = useState(0);
     if (tabs.length === 0) return null;
 
     return (
-        <div className="my-6 border border-white/10 rounded-xl overflow-hidden bg-black/20 shadow-lg">
-            <div className="flex border-b border-white/10 overflow-x-auto bg-black/40">
+        <div className="my-6 border border-white/10 rounded-xl overflow-hidden bg-black/20 shadow-lg clear-both" style={{ width: width || '100%' }}>
+            <div className="flex border-b border-white/10 overflow-x-auto bg-black/40 custom-scrollbar">
                 {tabs.map((tab, i) => (
                     <button
                         key={i}
@@ -176,39 +186,13 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], medi
                     </button>
                 ))}
             </div>
-            <div className="p-6 bg-wom-panel/50 min-h-[200px]">
+            <div className="p-4 bg-wom-panel/50 relative overflow-hidden" style={{ minHeight: height || 'auto' }}>
+                 {/* Re-render content when tab changes */}
                 <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
             </div>
         </div>
     );
 }
-
-const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, content }) => {
-    const [isOpen, setIsOpen] = useState(true);
-
-    return (
-        <div className="my-6 border border-wom-primary/30 rounded-lg overflow-hidden bg-wom-panel shadow-lg">
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full bg-gradient-to-r from-wom-primary/20 to-wom-accent/10 p-3 flex justify-between items-center hover:bg-white/5 transition-colors"
-            >
-                <span className="font-bold text-wom-accent uppercase tracking-wider text-sm">{title}</span>
-                {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-            {isOpen && (
-                <div className="p-4 bg-black/30 border-t border-white/5 text-sm text-gray-300">
-                    <div className="flex flex-wrap gap-4 justify-center">
-                        {content.split(',').map((item, i) => (
-                            <Link key={i} to={`/wiki/${item.trim().toLowerCase().replace(/ /g, '-')}`} className="hover:text-wom-primary hover:underline transition-colors">
-                                {item.trim()}
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 /* ============================================================================
    MAIN RENDERER
@@ -217,13 +201,13 @@ const NavboxComponent: React.FC<{ title: string, content: string }> = ({ title, 
 export function WikitextRenderer({ content, mediaFiles }: { content: string, mediaFiles: MediaItem[] }) {
   
   let cleanContent = content;
-  // Remove top level infobox only if it looks like standard metadata infobox at start
+  // Strip top-level infobox if detected
   const infoboxMatch = content.match(/{{Infobox[\s\S]*?}}/i);
   if (infoboxMatch && infoboxMatch.index !== undefined && infoboxMatch.index < 50) {
       cleanContent = content.replace(infoboxMatch[0], '').trim();
   }
 
-  // 2. Advanced Splitter for Templates
+  // Robust Splitter
   const parts: string[] = [];
   let currentStr = '';
   let braceDepth = 0;
@@ -255,18 +239,18 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
   if (currentStr) parts.push(currentStr);
 
   return (
-    <div className="prose prose-invert prose-purple max-w-none">
+    <div className="prose prose-invert prose-purple max-w-none text-gray-300">
       {parts.map((part, index) => {
         if (part.startsWith('{{') && part.endsWith('}}')) {
            const inner = part.slice(2, -2);
-           // We need to robustly find the template name (first arg before pipe)
-           // But the first pipe might be inside a nested template {{Nested|Arg}}
-           // So we use parseArgs logic even for the name extraction if complex
            const { parts: splitParts, args } = parseArgs(inner);
            const templateName = splitParts[0].trim();
            
-           if (['IMG2', 'SIDE1', 'SIDE2', 'GIF1', 'GIF2'].includes(templateName)) {
+           /* --- MEDIA TEMPLATES --- */
+
+           if (['IMG2', 'GIF', 'Video'].includes(templateName)) {
                const filename = splitParts[1]?.trim();
+               const isVideo = templateName === 'Video';
                let align = 'right';
                let width = '300px';
 
@@ -274,7 +258,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                    const arg = splitParts[i].trim().toLowerCase().replace(']]', ''); 
                    if (['left', 'right', 'center'].includes(arg)) {
                        align = arg;
-                   } else if (arg.endsWith('px')) {
+                   } else if (arg.endsWith('px') || arg.endsWith('%')) {
                        width = splitParts[i].trim().replace(']]', '');
                    }
                }
@@ -285,9 +269,13 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                if (align === 'center') floatClass = 'float-none mx-auto block mb-6 clear-both';
 
                return (
-                   <div key={index} className={`${floatClass} relative group`} style={{ width: width, maxWidth: '100%' }}>
+                   <div key={index} className={`${floatClass} relative group z-10`} style={{ width: width, maxWidth: '100%' }}>
                        <div className="bg-wom-panel border border-wom-primary/30 p-1 rounded shadow-[0_0_15px_rgba(168,85,247,0.1)]">
-                           <img src={url} alt={filename} className="w-full h-auto object-cover rounded" />
+                           {isVideo ? (
+                               <video src={url} controls className="w-full h-auto rounded" />
+                           ) : (
+                               <img src={url} alt={filename} className="w-full h-auto object-contain rounded max-h-[600px]" />
+                           )}
                        </div>
                    </div>
                );
@@ -304,165 +292,180 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                if (align === 'center') floatClass = 'float-none mx-auto block mb-6 clear-both';
 
                return (
-                   <div key={index} className={`${floatClass} relative group overflow-hidden rounded bg-black`} style={{ width: width }}>
+                   <div key={index} className={`${floatClass} relative group overflow-hidden rounded bg-black z-10`} style={{ width: width, maxWidth: '100%' }}>
                        <img src={img1} className="w-full h-auto object-cover transition-opacity duration-300 group-hover:opacity-0" alt="Base" />
                        <img src={img2} className="w-full h-auto object-cover absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" alt="Hover" />
                    </div>
                );
            }
 
-           if (templateName === 'ImageTooltip') {
-               const text = args['text'] || splitParts[1];
-               const imageFile = args['image'] || splitParts[2];
-               const url = findMediaUrl(imageFile, mediaFiles);
+           /* --- TEXT & DECORATION --- */
 
-               return (
-                   <span key={index} className="relative group inline-block border-b-2 border-dotted border-wom-accent/50 cursor-help">
-                       <span className="text-wom-accent font-medium">{text}</span>
-                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-black/90 p-1 rounded border border-wom-primary/50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
-                           <img src={url} className="w-full rounded" alt="Tooltip" />
-                       </div>
-                   </span>
-               );
-           }
-
-           if (templateName === 'HoverText') {
-               const text1 = args['1'] || splitParts[1];
-               const text2 = args['2'] || splitParts[2];
-               return (
-                   <span key={index} className="group relative inline-block cursor-pointer">
-                        <span className="group-hover:opacity-0 transition-opacity">{text1}</span>
-                        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity text-wom-accent font-bold">{text2}</span>
-                   </span>
-               );
-           }
-
-           if (templateName === 'Spoiler') {
-               const title = splitParts[1] || 'Spoiler Warning';
-               const spoilerContent = splitParts.slice(2).join('|'); 
-               return (
-                   <details key={index} className="my-4 bg-wom-panel border border-wom-primary/30 rounded-lg overflow-hidden group">
-                       <summary className="p-3 bg-white/5 cursor-pointer font-bold text-gray-200 select-none flex items-center gap-2 transition-colors hover:bg-white/10">
-                           <AlertTriangle size={16} className="text-wom-accent" /> {title} <span className="text-xs font-normal opacity-50 ml-auto">(Click to reveal)</span>
-                       </summary>
-                       <div className="p-4 bg-black/20 text-gray-300">
-                           <WikitextRenderer content={spoilerContent} mediaFiles={mediaFiles} />
-                       </div>
-                   </details>
-               );
-           }
-           
-           if (templateName === 'SpoilerList') {
-                const title = args['title'] || splitParts[1] || 'Expand List';
-                const content = args['content'] || splitParts.slice(2).join('|');
+           if (templateName === 'Gradient') {
+                const text = args['1'] || splitParts[1] || 'Text';
+                const from = args['2'] || splitParts[2] || '#a855f7';
+                const to = args['3'] || splitParts[3] || '#d946ef';
                 return (
-                    <details key={index} className="my-2 border-l-2 border-wom-primary/50 pl-2 group">
-                        <summary className="cursor-pointer text-sm font-bold text-wom-primary hover:text-white transition-colors select-none flex items-center gap-1">
-                             <ChevronRight size={14} className="transition-transform group-open:rotate-90"/> {title}
-                        </summary>
-                        {/* Ensure content inside doesn't shrink or break layout */}
-                        <div className="mt-2 text-sm pl-4 text-gray-400">
-                             <WikitextRenderer content={content} mediaFiles={mediaFiles} />
-                        </div>
-                    </details>
+                    <span key={index} 
+                        style={{ 
+                            background: `linear-gradient(to right, ${from}, ${to})`,
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            fontWeight: 'bold'
+                        }}
+                    >
+                        {text}
+                    </span>
                 );
            }
 
-           if (templateName === 'SpoilerText') {
-               const text = splitParts[1];
-               return <span key={index} className="bg-black text-black hover:bg-transparent hover:text-white transition-colors cursor-help px-1 rounded select-none hover:select-text">{text}</span>;
+           /* --- ID TEMPLATES (V1, V2, V3) --- */
+
+           // V1: Cyber/Tech
+           if (templateName === 'IDV1') {
+                const title = args['title'] || 'IDENTIFIER';
+                const name = args['name'] || 'Unknown';
+                const rank = args['rank'] || 'N/A';
+                const image = findMediaUrl(args['image'], mediaFiles);
+                const color = args['color'] || '#a855f7';
+                
+                return (
+                    <div key={index} className="float-right ml-6 mb-4 w-72 bg-black border-2 relative overflow-hidden group shadow-lg z-10" style={{ borderColor: color }}>
+                        {/* Scanline Effect */}
+                        <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] pointer-events-none opacity-20 z-20"></div>
+                        
+                        <div className="bg-white/5 p-2 border-b" style={{ borderColor: color }}>
+                            <div className="text-xs font-mono uppercase tracking-[0.2em] text-right" style={{ color: color }}>// {title} //</div>
+                        </div>
+                        
+                        <div className="relative h-64 overflow-hidden">
+                            <img src={image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" alt="ID" />
+                            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/80 to-transparent">
+                                <h3 className="text-2xl font-display font-bold text-white uppercase">{name}</h3>
+                                <p className="text-sm font-mono" style={{ color: color }}>RANK: {rank}</p>
+                            </div>
+                        </div>
+                    </div>
+                );
            }
 
-           if (templateName === 'Gallery') {
-               const rawLines = inner.replace('Gallery', '').trim().split('\n');
-               const images = rawLines.map(line => line.replace('|', '').trim()).filter(l => l.startsWith('File:'));
+           // V2: Scroll/Mystic
+           if (templateName === 'IDV2') {
+               const name = args['name'] || 'Name';
+               const title = args['title'] || 'Title';
+               const image = findMediaUrl(args['image'], mediaFiles);
+               const glow = args['color'] || '#ffd700';
+
                return (
-                   <div key={index} className="grid grid-cols-2 md:grid-cols-3 gap-2 my-6">
-                       {images.map((imgName, idx) => (
-                           <div key={idx} className="bg-black/40 border border-white/10 rounded p-1 hover:border-wom-primary transition-colors group">
-                               <div className="overflow-hidden rounded">
-                                  <img src={findMediaUrl(imgName, mediaFiles)} className="w-full h-32 object-cover transition-transform duration-500 group-hover:scale-110" alt="" />
-                               </div>
-                               <div className="text-[10px] text-center text-gray-500 mt-1 truncate">{imgName.replace('File:', '')}</div>
-                           </div>
-                       ))}
+                   <div key={index} className="float-right ml-6 mb-4 w-72 relative z-10 group text-center">
+                       <div className="absolute inset-0 blur-xl opacity-30 rounded-full" style={{ backgroundColor: glow }}></div>
+                       <div className="relative z-10 border-4 double p-1 rounded-t-full rounded-b-lg bg-[#0a0505]" style={{ borderColor: glow }}>
+                            <div className="h-64 rounded-t-full rounded-b-sm overflow-hidden border border-white/10">
+                                <img src={image} className="w-full h-full object-cover" alt="Portrait" />
+                            </div>
+                            <div className="p-4 border-t border-white/10 mt-1">
+                                <h3 className="font-serif text-2xl text-white font-bold tracking-widest">{name}</h3>
+                                <div className="h-px w-12 mx-auto my-2" style={{ backgroundColor: glow }}></div>
+                                <p className="text-xs uppercase tracking-widest text-gray-400">{title}</p>
+                            </div>
+                       </div>
                    </div>
+               );
+           }
+
+           // V3: Modern/Card
+           if (templateName === 'IDV3') {
+               const name = args['name'] || 'NAME';
+               const stats = args['stats'] || '';
+               const image = findMediaUrl(args['image'], mediaFiles);
+               const bg = args['bg'] || '#222';
+
+               return (
+                   <div key={index} className="float-right ml-6 mb-4 w-80 rounded-2xl overflow-hidden shadow-2xl relative z-10 group" style={{ background: bg }}>
+                        <div className="h-48 overflow-hidden relative">
+                            <img src={image} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" alt="Header" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                            <div className="absolute bottom-4 left-4">
+                                <h2 className="text-3xl font-black italic text-white tracking-tighter shadow-black drop-shadow-md">{name}</h2>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-white/5 backdrop-blur-sm">
+                            <div className="text-sm text-gray-300 font-bold whitespace-pre-wrap">{stats}</div>
+                        </div>
+                   </div>
+               );
+           }
+
+           /* --- LAYOUT & STRUCTURE --- */
+
+           if (templateName === 'Gallery') {
+               const title = args['title'] || splitParts[1] || 'Gallery';
+               const content = args['content'] || splitParts.slice(2).join('\n');
+               
+               // Manually extract File: links from content args if provided as positional
+               const images: string[] = [];
+               if (!args['content']) {
+                    splitParts.forEach((p, i) => {
+                        if(i > 1 && p.includes('File:')) images.push(p.trim());
+                    });
+               } else {
+                   // Try to regex parse if passed as content block
+                   const matches = content.match(/File:[^|\n\]]+/g);
+                   if (matches) matches.forEach(m => images.push(m));
+               }
+
+               return (
+                   <details key={index} className="my-6 border border-white/10 rounded-xl overflow-hidden bg-black/20 group clear-both">
+                       <summary className="p-4 bg-white/5 cursor-pointer font-bold text-lg flex items-center gap-2 hover:bg-white/10 transition-colors select-none">
+                           <ImageIcon size={20} className="text-wom-primary" /> {title} <ChevronDown className="ml-auto transition-transform group-open:rotate-180" size={16} />
+                       </summary>
+                       <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                           {images.map((img, idx) => (
+                               <div key={idx} className="bg-black border border-white/5 rounded-lg overflow-hidden p-1 hover:border-wom-primary transition-colors">
+                                   <img 
+                                        src={findMediaUrl(img, mediaFiles)} 
+                                        className="w-full h-40 object-cover rounded hover:scale-105 transition-transform cursor-pointer" 
+                                        alt="Gallery Item" 
+                                        onClick={() => window.open(findMediaUrl(img, mediaFiles), '_blank')}
+                                   />
+                               </div>
+                           ))}
+                       </div>
+                   </details>
                );
            }
 
            if (templateName === 'Tabber') {
                const tabs: {title: string, content: string}[] = [];
-               // Iterate over args, any arg that isn't named might be part of Tabber syntax or we just assume title=content pairs
+               const width = args['width'];
+               const height = args['height'];
+
+               // Robust arg extraction: Only take named args that are not 'width' or 'height'
+               // OR positional args if defined as key=value in parseArgs logic
                Object.keys(args).forEach(key => {
-                   // Filter out numeric keys if they are just garbage
+                   if (key === 'width' || key === 'height') return;
+                   // Filter out numeric keys generated by split if they duplicate named keys
                    if (isNaN(parseInt(key))) {
                        tabs.push({ title: key, content: args[key] });
                    }
                });
-               return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} />;
-           }
-
-           if (templateName === 'Quote') {
-              return (
-                 <div key={index} className="my-6 relative p-6 bg-white/5 border-l-4 border-wom-primary rounded-r-lg">
-                    <p className="text-xl italic text-white font-display mb-2">"{splitParts[1]}"</p>
-                    <p className="text-sm text-gray-400 text-right">— <span className="font-bold text-wom-accent">{splitParts[2]}</span> {splitParts[3] && `, ${splitParts[3]}`}</p>
-                 </div>
-              );
-           }
-
-           if (templateName === 'Furigana') {
-              return (
-                 <span key={index} className="inline-flex flex-col items-center leading-none mx-1 align-middle group cursor-help">
-                    <span className="text-[9px] text-wom-accent opacity-70 group-hover:opacity-100 transition-opacity">{splitParts[2]}</span>
-                    <span className="text-base text-white">{splitParts[1]}</span>
-                 </span>
-              );
-           }
-           
-           if (templateName === 'Color') {
-               return <span key={index} style={{ color: splitParts[1] }}>{splitParts[2]}</span>;
-           }
-
-           if (templateName === 'BattleResult') {
-               const result = (args['result'] || splitParts[1] || 'Draw').toLowerCase();
-               const score = args['score'] || splitParts[2] || '';
-               const bgImage = args['image'] ? findMediaUrl(args['image'], mediaFiles) : null;
                
-               let bgClass = 'from-gray-800 to-gray-900 border-gray-600';
-               let textClass = 'text-gray-200';
-               let icon = <HelpCircle size={24} />;
-               
-               if (result.includes('win') || result.includes('victory')) {
-                   bgClass = 'from-green-900/50 to-green-950/80 border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.2)]';
-                   textClass = 'text-green-400';
-                   icon = <CheckCircle size={24} />;
-               } else if (result.includes('los') || result.includes('defeat')) {
-                   bgClass = 'from-red-900/50 to-red-950/80 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]';
-                   textClass = 'text-red-400';
-                   icon = <XCircle size={24} />;
-               }
+               return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} width={width} height={height} />;
+           }
 
-               return (
-                   <div key={index} className={`my-6 rounded-xl border relative overflow-hidden group ${bgClass}`}>
-                       {bgImage && (
-                           <div className="absolute inset-0 z-0">
-                               <img src={bgImage} className="w-full h-full object-cover opacity-30 group-hover:opacity-40 transition-opacity" alt="Battle BG"/>
-                               <div className="absolute inset-0 bg-gradient-to-r from-black/90 to-transparent"></div>
-                           </div>
-                       )}
-                       <div className="relative z-10 p-4 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className={`${textClass}`}>{icon}</div>
-                                <div>
-                                    <h4 className={`text-xl font-display font-bold uppercase tracking-wider ${textClass}`}>{result.toUpperCase()}</h4>
-                                    {score && <p className="text-sm text-gray-300 font-bold">{score}</p>}
-                                </div>
-                            </div>
-                            <div className="hidden md:block text-xs font-mono opacity-50 uppercase tracking-widest bg-black/50 px-2 py-1 rounded">Battle Record</div>
-                       </div>
-                   </div>
-               );
+           if (templateName === 'Spoiler' || templateName === 'SpoilerList') {
+                const title = args['title'] || splitParts[1] || 'Spoiler';
+                const content = args['content'] || splitParts.slice(2).join('|');
+                return (
+                    <details key={index} className="my-4 border-l-4 border-wom-primary bg-white/5 rounded-r-lg group clear-both">
+                        <summary className="p-3 cursor-pointer font-bold flex items-center gap-2 text-wom-primary hover:text-white transition-colors">
+                             <ChevronRight size={16} className="transition-transform group-open:rotate-90"/> {title}
+                        </summary>
+                        <div className="p-4 pt-0 text-sm text-gray-300">
+                             <WikitextRenderer content={content} mediaFiles={mediaFiles} />
+                        </div>
+                    </details>
+                );
            }
 
            if (templateName === 'Frame') {
@@ -470,6 +473,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 const content = args['content'] || splitParts[2];
                 const iconName = args['icon'] || 'box';
                 const borderColor = args['border'] || '#a855f7'; 
+                const bg = args['bg'] || '#0f0a19';
                 
                 let IconComp = Box;
                 if(iconName === 'shield') IconComp = Shield;
@@ -478,7 +482,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 if(iconName === 'crown') IconComp = Crown;
 
                 return (
-                    <div key={index} className="my-6 rounded-lg overflow-hidden bg-wom-panel border-2 shadow-lg" style={{ borderColor: borderColor }}>
+                    <div key={index} className="my-6 rounded-lg overflow-hidden border-2 shadow-lg clear-both" style={{ borderColor: borderColor, backgroundColor: bg }}>
                         {title && (
                             <div className="p-2 font-display font-bold text-white text-center uppercase tracking-widest flex items-center justify-center gap-2" style={{ backgroundColor: borderColor }}>
                                 <IconComp size={18} /> {title}
@@ -504,7 +508,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                if (type === 'error') { colors = 'bg-red-900/20 border-red-500/30 text-red-200'; Icon = XCircle; }
 
                return (
-                   <div key={index} className={`my-4 p-4 rounded-lg border flex gap-4 ${colors}`}>
+                   <div key={index} className={`my-4 p-4 rounded-lg border flex gap-4 ${colors} clear-both`}>
                        <Icon className="shrink-0 mt-0.5" size={20} />
                        <div>
                            <div className="font-bold mb-1">{title}</div>
@@ -514,17 +518,14 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                );
            }
 
-           if (templateName === 'Navbox') {
-               const title = args['title'] || 'Navigation';
-               const content = args['list'] || args['content'] || '';
-               return <NavboxComponent key={index} title={title} content={content} />;
-           }
-
-           return <span key={index} className="text-xs text-red-400 border border-red-900 px-1 rounded bg-red-900/10" title={inner}>Missing Template: {templateName}</span>;
+           return <span key={index} className="text-xs text-red-400 border border-red-900 px-1 rounded bg-red-900/10" title={inner}>Template Error: {templateName}</span>;
         } else {
-           return <MarkdownBlock key={index} text={part} />;
+           return <MarkdownBlock key={index} text={part} mediaFiles={mediaFiles} />;
         }
       })}
+      
+      {/* Clearfix to ensure floated images don't bleed into comments */}
+      <div className="clear-both table"></div>
     </div>
   );
 }

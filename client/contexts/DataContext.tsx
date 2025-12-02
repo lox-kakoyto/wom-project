@@ -5,34 +5,74 @@ import { API_URL } from '../constants';
 
 const TEMPLATES: WikiTemplate[] = [
   {
-    name: 'Frame (Universal Frame)',
-    description: 'Custom container with border, icon, and title.',
-    content: `{{Frame|title=Title Here|content=Content Here|icon=box|border=#a855f7}}`
+    name: 'IDV1 (Техно)',
+    description: 'Киберпанк стиль идентификатора.',
+    content: `{{IDV1
+|title=UNIT-01
+|name=ИМЯ
+|rank=S-CLASS
+|image=File:Name.jpg
+|color=#00eaff
+}}`
   },
   {
-    name: 'BattleResult (Advanced)',
-    description: 'Battle outcome with optional image background',
-    content: `{{BattleResult|result=Victory|score=High Diff|image=File:BG.jpg}}`
+    name: 'IDV2 (Мистика)',
+    description: 'Стиль свитка для магов.',
+    content: `{{IDV2
+|name=Имя
+|title=Титул
+|image=File:Name.jpg
+|color=#ffd700
+}}`
   },
   {
-    name: 'HoverImage (Image Swap)',
-    description: 'Image changes when you hover over it.',
-    content: `{{HoverImage|File:Base.jpg|File:Hover.jpg|width=300px}}`
+    name: 'IDV3 (Модерн)',
+    description: 'Карточка персонажа.',
+    content: `{{IDV3
+|name=ИМЯ
+|image=File:Name.jpg
+|stats=HP: 100 | MP: 50
+|bg=#222
+}}`
   },
   {
-    name: 'IMG2 (Advanced Image)',
-    description: 'Use for aligned images: {{IMG2|File:Name.jpg|center|400px}}',
-    content: `{{IMG2|File:Name.jpg|right|300px}}`
+    name: 'Frame (Рамка)',
+    description: 'Цветной блок с иконкой.',
+    content: `{{Frame|title=Заголовок|content=Текст|icon=zap|border=#a855f7|bg=#0f0a19}}`
   },
   {
-    name: 'Infobox Character',
-    description: 'Standard character stats',
+    name: 'Tabber (Вкладки)',
+    description: 'Вкладки с картинками или текстом.',
+    content: `{{Tabber
+|width=100%
+|Base Form={{IMG2|File:Base.jpg|center|300px}}
+|Super Form={{IMG2|File:Super.jpg|center|300px}}
+}}`
+  },
+  {
+    name: 'Video (Видео)',
+    description: 'Вставка MP4.',
+    content: `{{Video|File:Name.mp4|center|400px}}`
+  },
+  {
+    name: 'Gallery (Галерея)',
+    description: 'Список картинок.',
+    content: `{{Gallery|title=Галерея|File:1.jpg|File:2.jpg}}`
+  },
+  {
+    name: 'Gradient (Градиент)',
+    description: 'Цветной текст.',
+    content: `{{Gradient|Текст|#ff0000|#0000ff}}`
+  },
+  {
+    name: 'Infobox (Инфобокс)',
+    description: 'Стандартная таблица.',
     content: `{{Infobox
-| name = Name
+| name = Имя
 | image = File:Image.jpg
-| origin = Series
-| classification = Class
-| age = Age
+| origin = Вселенная
+| classification = Класс
+| age = Возраст
 }}`
   }
 ];
@@ -183,11 +223,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.ok) {
             const msgs = await res.json();
             setActiveConversationMessages(prev => {
-                // Only update if length changed to prevent jitter, 
-                // but for simple polling we just replace. 
-                // React handles diffing well enough for small lists.
                 if (prev.length !== msgs.length) return msgs;
-                // Check last message ID
                 if (prev.length > 0 && msgs.length > 0 && prev[prev.length-1].id !== msgs[msgs.length-1].id) return msgs;
                 return prev;
             });
@@ -246,7 +282,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 };
                 setCurrentUser(mappedUser);
                 
-                // Fetch User Specific Data
                 fetchFriends(mappedUser.id);
                 fetchNotifications(mappedUser.id);
             } else {
@@ -267,11 +302,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!token || currentUser.id === 'guest') return;
 
       const poll = async () => {
-          // Poll Active Chat if one is open
           if (activeConversationId) {
               await refreshChat(activeConversationId);
           }
-          // Poll Notifications (background)
           fetchNotifications(currentUser.id);
       };
 
@@ -394,7 +427,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }) => {
-      // Optimistic update
       setCurrentUser(prev => ({ ...prev, ...data }));
       try {
           await fetch(`${API_URL}/users/${id}`, {
@@ -407,7 +439,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const toggleWatch = async (slug: string) => {
       if(!currentUser || currentUser.id === 'guest') return;
-      // Optimistic
       const isWatching = currentUser.watchlist?.includes(slug);
       const newWatchlist = isWatching 
          ? currentUser.watchlist?.filter(s => s !== slug) 
@@ -427,8 +458,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- Content Creation ---
 
   const addArticle = async (article: Article) => {
-    // Add locally for feel, though article ID might need sync. 
-    // Ideally we wait for server for Articles as they are heavy.
     try {
       await fetch(`${API_URL}/articles`, {
         method: 'POST',
@@ -462,7 +491,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addThreadComment = async (threadId: string, comment: Comment) => {
-      // Optimistic UI update
       setThreads(prev => prev.map(t => {
           if (t.id === threadId) {
               return { ...t, comments: [...t.comments, comment] };
@@ -476,13 +504,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ threadId, authorId: currentUser.id, content: comment.content })
           });
-          // Background refresh to get ID
           refreshThreads();
       } catch (e) { console.error(e); }
   };
 
   const addArticleComment = async (articleId: string, comment: Comment) => {
-      // Optimistic
       setArticles(prev => prev.map(a => {
           if (a.id === articleId) {
               return { ...a, comments: [...a.comments, comment] };
@@ -501,8 +527,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const replyToArticleComment = async (articleId: string, parentCommentId: string, reply: Comment) => {
-      // Optimistic tree update is complex, we'll just wait for refresh or do a simple push
-      // Doing simple refresh for complex trees
       try {
           await fetch(`${API_URL}/articles/comments`, {
               method: 'POST',
@@ -514,7 +538,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const replyToWallPost = async (postId: string, parentCommentId: string | null, reply: Comment) => {
-      // Optimistic
       try {
           await fetch(`${API_URL}/wall/comments`, {
               method: 'POST',
@@ -526,7 +549,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendWallPost = async (post: WallPost) => {
-      // Optimistic
       setWallPosts(prev => [post, ...prev]);
 
       try {
@@ -539,18 +561,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) { console.error(e); }
   };
 
-  // --- New Chat Functions ---
-
   const setActiveConversation = (roomId: string) => {
       setActiveConversationId(roomId);
-      // Immediately fetch
       refreshChat(roomId);
   };
 
   const sendMessage = async (msg: ChatMessage) => {
-      // Optimistic Update
       setActiveConversationMessages(prev => [...prev, msg]);
-      
       try {
           const res = await fetch(`${API_URL}/chat`, {
               method: 'POST',
@@ -559,13 +576,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           if (res.ok) {
               const savedMsg = await res.json();
-              // Replace optimistic msg with real one (updates timestamp/ID)
               setActiveConversationMessages(prev => prev.map(m => m.id === msg.id ? savedMsg : m));
           }
       } catch (e) { console.error(e); }
   };
-
-  // --- Friend Functions ---
 
   const sendFriendRequest = async (receiverId: string) => {
       try {
@@ -608,7 +622,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const uploadMedia = async (file: MediaItem) => {
-      // Optimistic
       setMediaFiles(prev => [file, ...prev]);
       try {
           const res = await fetch(`${API_URL}/media`, {

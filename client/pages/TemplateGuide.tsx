@@ -1,15 +1,15 @@
 
 import React from 'react';
-import { Book, Code, Layers } from 'lucide-react';
+import { Book, Code, Layers, Image, Video, Palette, Fingerprint } from 'lucide-react';
 
-const TemplateExample: React.FC<{ title: string, description: string, code: string }> = ({ title, description, code }) => (
+const TemplateExample: React.FC<{ title: string, description: string, code: string, icon?: React.ReactNode }> = ({ title, description, code, icon }) => (
     <div className="mb-10 bg-wom-panel border border-white/10 rounded-xl overflow-hidden">
         <div className="p-4 bg-wom-primary/10 border-b border-white/5 flex items-center gap-3">
-            <Code size={20} className="text-wom-accent" />
+            {icon || <Code size={20} className="text-wom-accent" />}
             <h3 className="text-xl font-bold text-white">{title}</h3>
         </div>
         <div className="p-6">
-            <p className="text-gray-300 mb-4">{description}</p>
+            <p className="text-gray-300 mb-4 whitespace-pre-wrap">{description}</p>
             <div className="bg-black/50 p-4 rounded-lg border border-white/10 font-mono text-sm text-green-400 overflow-x-auto whitespace-pre-wrap">
                 {code}
             </div>
@@ -19,122 +19,134 @@ const TemplateExample: React.FC<{ title: string, description: string, code: stri
 
 export const TemplateGuide: React.FC = () => {
   return (
-    <div className="max-w-4xl mx-auto animate-fade-in pb-20">
+    <div className="max-w-5xl mx-auto animate-fade-in pb-20">
         <div className="flex items-center gap-4 mb-8 pb-8 border-b border-wom-primary/30">
             <div className="p-4 bg-wom-primary rounded-lg shadow-lg shadow-purple-900/50">
                 <Layers size={32} className="text-white" />
             </div>
             <div>
                 <h1 className="text-4xl font-display font-bold text-white">Справочник Шаблонов</h1>
-                <p className="text-gray-400 mt-2">Руководство по использованию специальных вики-кодов для оформления статей.</p>
+                <p className="text-gray-400 mt-2">Руководство по оформлению статей в World of Madness.</p>
             </div>
         </div>
 
         <div className="prose prose-invert max-w-none mb-12">
             <p className="text-lg text-gray-300">
-                Шаблоны (Templates) — это специальные конструкции в двойных фигурных скобках <code>{'{{...}}'}</code>, которые позволяют добавлять сложные элементы на страницу.
+                Здесь собраны все доступные коды (шаблоны) для украшения ваших статей. Просто скопируйте код и замените текст на свой.
             </p>
         </div>
 
-        <h2 className="text-2xl font-bold text-wom-accent mb-6">Новые Шаблоны (WOM Exclusives)</h2>
-
+        {/* SECTION: MEDIA */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Video className="text-wom-primary" /> Медиа (Видео и GIF)
+        </h2>
         <TemplateExample 
-            title="Frame (Универсальная Рамка)"
-            description="Заменяет шаблоны рамок с эмблемами. Позволяет создать красивый контейнер с заголовком и иконкой."
-            code={`{{Frame
-|title=Особые Навыки
-|content=Здесь идет описание навыков...
-|icon=zap
-|border=#ef4444}}
-
-Параметры:
-icon: box, shield, zap, skull, crown
-border: hex код цвета (например #ff0000)`}
+            title="Video (Видео MP4)"
+            description="Вставка видеофайла. Поддерживает форматы MP4, WebM."
+            code={`{{Video|File:Name.mp4|right|300px}}`}
         />
-
         <TemplateExample 
-            title="HoverImage (Смена Картинки)"
-            description="Показывает одну картинку, но при наведении курсора плавно заменяет её на другую. Идеально для демонстрации трансформаций или вида 'до/после'."
-            code={`{{HoverImage|File:Normal.jpg|File:DemonMode.jpg|width=300px}}
-
-1 аргумент: Базовая картинка
-2 аргумент: Картинка при наведении`}
+            title="GIF (Анимация)"
+            description="Вставка GIF изображений. Работает аналогично картинкам."
+            code={`{{GIF|File:Anime.gif|center|400px}}`}
         />
-
         <TemplateExample 
-            title="ImageTooltip (Картинка-подсказка)"
-            description="Текст, при наведении на который всплывает маленькое окошко с картинкой. Полезно для иконок способностей в тексте."
-            code={`Этот персонаж использует {{ImageTooltip|text=Огненный Шар|image=File:FireballIcon.png}} для атаки.`}
-        />
-
-        <TemplateExample 
-            title="HoverText (Скрытый текст)"
-            description="Текст, который меняется на другой при наведении."
-            code={`{{HoverText|Наведи на меня|Секретное сообщение!}}`}
-        />
-
-        <TemplateExample 
-            title="SpoilerList (Спойлер-список)"
-            description="Компактный раскрывающийся список, отлично подходит для перечисления большого количества способностей или подвигов."
-            code={`{{SpoilerList|title=Список Подвигов|content=
-* Уничтожил гору
-* Победил дракона
-* Пережил взрыв сверхновой
+            title="Gallery (Галерея)"
+            description="Раскрывающийся список изображений. Можно переименовать заголовок."
+            code={`{{Gallery|title=Галерея Форм|
+File:Form1.jpg
+File:Form2.jpg
+File:Form3.jpg
 }}`}
         />
 
+        {/* SECTION: IDENTIFIERS */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Fingerprint className="text-wom-primary" /> Идентификаторы (ID)
+        </h2>
+        <p className="text-gray-400 mb-6">Выберите один из трех стилей для оформления шапки персонажа.</p>
+        
         <TemplateExample 
-            title="BattleResult (Итоги Битвы - Расширенный)"
-            description="Теперь поддерживает фоновое изображение для создания эпичных баннеров побед/поражений."
-            code={`{{BattleResult|result=Victory|score=Low Diff|image=File:BattleScene.jpg}}`}
+            title="IDV1: Киберпанк (Техно)"
+            description="Стильный цифровой блок с эффектом сканирования. Идеально для роботов, киборгов и sci-fi."
+            code={`{{IDV1
+|title=PROJECT 01
+|name=GENOS
+|rank=S-CLASS
+|image=File:Genos.jpg
+|color=#00eaff
+}}`}
+        />
+        <TemplateExample 
+            title="IDV2: Свиток (Мистика)"
+            description="Элегантный стиль для магов, фэнтези и божеств. Свечение и двойные рамки."
+            code={`{{IDV2
+|name=Ainz Ooal Gown
+|title=Supreme Being
+|image=File:Ainz.jpg
+|color=#ffd700
+}}`}
+        />
+        <TemplateExample 
+            title="IDV3: Карточка (Модерн)"
+            description="Современная карточка с градиентом и статистикой."
+            code={`{{IDV3
+|name=GOJO SATORU
+|image=File:Gojo.jpg
+|stats=HP: ∞ | MP: ∞
+|bg=#0f0c29
+}}`}
         />
 
+        {/* SECTION: DECORATION */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Palette className="text-wom-primary" /> Оформление Текста
+        </h2>
+        <TemplateExample 
+            title="Gradient (Градиентный Текст)"
+            description="Создание уникального текста способностей или имен."
+            code={`{{Gradient|Текст Способности|#ff0000|#0000ff}}`}
+        />
+
+        {/* SECTION: STRUCTURE */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Layers className="text-wom-primary" /> Структура
+        </h2>
+        <TemplateExample 
+            title="Frame (Универсальная Рамка)"
+            description="Настраиваемый блок. Можно менять цвет границ и фона."
+            code={`{{Frame
+|title=Заголовок
+|icon=zap
+|border=#ef4444
+|bg=#1a0505
+|content=Текст внутри рамки...
+}}`}
+        />
+        <TemplateExample 
+            title="Tabber (Вкладки)"
+            description="Переключатель контента. Теперь поддерживает картинки и видео внутри вкладок! Можно задать width/height."
+            code={`{{Tabber
+|width=100%
+|height=400px
+|Версия 1={{IMG2|File:V1.jpg|center|100%}}
+|Версия 2={{Video|File:V2.mp4|center|100%}}
+}}`}
+        />
+
+        {/* LEGACY */}
         <h2 className="text-2xl font-bold text-wom-primary mb-6 border-t border-white/10 pt-6">Базовые Шаблоны</h2>
-
         <TemplateExample 
-            title="IMG2 (Изображение)"
-            description="Основной способ добавить картинку в текст статьи."
-            code={`{{IMG2|File:ИмяФайла.jpg|right|300px}}`}
-        />
-
-        <TemplateExample 
-            title="Infobox (Карточка)"
-            description="Таблица характеристик персонажа."
+            title="Infobox (Карточка Персонажа)"
+            description="Основная таблица с данными."
             code={`{{Infobox
 | name = Имя
 | image = File:Avatar.jpg
 | origin = Вселенная
 | classification = Класс
+| age = Возраст
 }}`}
         />
-
-        <TemplateExample 
-            title="MessageBlock (Блок Внимания)"
-            description="Цветной блок уведомления."
-            code={`{{MessageBlock|type=warning|title=Внимание|text=Текст предупреждения.}}`}
-        />
-
-        <TemplateExample 
-            title="Tabber (Вкладки)"
-            description="Переключаемые вкладки."
-            code={`{{Tabber
-|Форма 1=Текст...
-|Форма 2=Текст...
-}}`}
-        />
-
-        <TemplateExample 
-            title="Spoiler (Спойлер)"
-            description="Скрывает блок контента."
-            code={`{{Spoiler|Заголовок|Скрытый текст}}`}
-        />
-
-        <TemplateExample 
-            title="Navbox (Навигация)"
-            description="Список ссылок внизу страницы."
-            code={`{{Navbox|title=Группа|list=Персонаж 1, Персонаж 2}}`}
-        />
-
     </div>
   );
 };

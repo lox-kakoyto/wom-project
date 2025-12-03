@@ -5,79 +5,92 @@ import { API_URL } from '../constants';
 
 const TEMPLATES: WikiTemplate[] = [
   {
-    name: 'IDV1 (Техно)',
-    description: 'Киберпанк стиль идентификатора.',
+    name: 'Tabber (Advanced)',
+    description: 'Switch content tabs. Styles: classic, cyberpunk, folder, pills.',
+    content: `{{Tabber
+|style=cyberpunk
+|Form 1={{IMG2|File:Base.jpg|center|100%}}
+|Form 2={{IMG2|File:Super.jpg|center|100%}}
+}}`
+  },
+  {
+    name: 'MusicTabber',
+    description: 'Audio player with playlist.',
+    content: `{{MusicTabber
+|Theme 1=File:Theme1.mp3
+|Battle Theme=File:Theme2.mp3
+}}`
+  },
+  {
+    name: 'BattleResults',
+    description: 'Wins, Draws, Losses tracking. Styles: classic, cards, compact.',
+    content: `{{BattleResults
+|style=cards
+|wins=[[Goku]] (Low Diff)
+|draws=[[Vegeta]] (Interrupted)
+|losses=[[Saitama]] (One Shot)
+}}`
+  },
+  {
+    name: 'IDV1 (Techno)',
+    description: 'Cyberpunk style identifier.',
     content: `{{IDV1
 |title=UNIT-01
-|name=ИМЯ
+|name=NAME
 |rank=S-CLASS
 |image=File:Name.jpg
 |color=#00eaff
 }}`
   },
   {
-    name: 'IDV2 (Мистика)',
-    description: 'Стиль свитка для магов.',
+    name: 'IDV2 (Mystic)',
+    description: 'Scroll style for mages.',
     content: `{{IDV2
-|name=Имя
-|title=Титул
+|name=Name
+|title=Title
 |image=File:Name.jpg
 |color=#ffd700
 }}`
   },
   {
-    name: 'IDV3 (Модерн)',
-    description: 'Карточка персонажа.',
+    name: 'IDV3 (Modern)',
+    description: 'Character card.',
     content: `{{IDV3
-|name=ИМЯ
+|name=NAME
 |image=File:Name.jpg
 |stats=HP: 100 | MP: 50
 |bg=#222
 }}`
   },
   {
-    name: 'Frame (Рамка)',
-    description: 'Цветной блок с иконкой.',
-    content: `{{Frame|title=Заголовок|content=Текст|icon=zap|border=#a855f7|bg=#0f0a19}}`
+    name: 'Frame',
+    description: 'Colored block with icon.',
+    content: `{{Frame|title=Title|content=Text|icon=zap|border=#a855f7|bg=#0f0a19}}`
   },
   {
-    name: 'Tabber (Вкладки)',
-    description: 'Вкладки с картинками или текстом.',
-    content: `{{Tabber
-|width=100%
-|Base Form={{IMG2|File:Base.jpg|center|300px}}
-|Super Form={{IMG2|File:Super.jpg|center|300px}}
-}}`
-  },
-  {
-    name: 'Video (Видео)',
-    description: 'Вставка MP4.',
+    name: 'Video',
+    description: 'Insert MP4 video.',
     content: `{{Video|File:Name.mp4|center|400px}}`
   },
   {
-    name: 'Gallery (Галерея)',
-    description: 'Список картинок.',
-    content: `{{Gallery|title=Галерея|File:1.jpg|File:2.jpg}}`
+    name: 'Gallery',
+    description: 'List of images.',
+    content: `{{Gallery|title=Gallery|File:1.jpg|File:2.jpg}}`
   },
   {
-    name: 'Musikbox (Аудио)',
-    description: 'Аудиоплеер.',
-    content: `{{Musikbox|title=Theme Song|File:Song.mp3}}`
+    name: 'Gradient',
+    description: 'Colored text.',
+    content: `{{Gradient|Text|#ff0000|#0000ff}}`
   },
   {
-    name: 'Gradient (Градиент)',
-    description: 'Цветной текст.',
-    content: `{{Gradient|Текст|#ff0000|#0000ff}}`
-  },
-  {
-    name: 'Infobox (Инфобокс)',
-    description: 'Стандартная таблица.',
+    name: 'Infobox',
+    description: 'Standard character table.',
     content: `{{Infobox
-| name = Имя
+| name = Name
 | image = File:Image.jpg
-| origin = Вселенная
-| classification = Класс
-| age = Возраст
+| origin = Universe
+| classification = Class
+| age = Age
 }}`
   }
 ];
@@ -95,7 +108,6 @@ const buildCommentTree = (flatComments: any[]): Comment[] => {
     const commentMap: Record<string, Comment> = {};
     const roots: Comment[] = [];
 
-    // Deep copy to avoid reference issues
     const comments = flatComments.map(c => ({...c, replies: []}));
 
     comments.forEach(c => {
@@ -125,11 +137,9 @@ interface DataContextType {
   templates: WikiTemplate[];
   mediaFiles: MediaItem[];
   
-  // Friend System
   friends: Friendship[];
   friendRequests: FriendRequest[];
 
-  // Sidebar State
   isSidebarCollapsed: boolean;
   toggleSidebar: () => void;
 
@@ -146,7 +156,6 @@ interface DataContextType {
   addArticleComment: (articleId: string, comment: Comment) => void;
   replyToArticleComment: (articleId: string, parentCommentId: string, reply: Comment) => void;
   
-  // New Chat Logic
   setActiveConversation: (roomId: string) => void;
   activeConversationId: string | null;
   sendMessage: (msg: ChatMessage) => void;
@@ -157,12 +166,10 @@ interface DataContextType {
   uploadMedia: (file: MediaItem) => void;
   toggleWatch: (slug: string) => void;
 
-  // Friend Actions
   sendFriendRequest: (receiverId: string) => void;
   acceptFriendRequest: (requestId: string) => void;
   rejectFriendRequest: (requestId: string) => void;
   
-  // Refreshers
   refreshArticles: () => void;
 }
 
@@ -177,7 +184,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [articles, setArticles] = useState<Article[]>([]); 
   const [threads, setThreads] = useState<ColiseumThread[]>([]);
   
-  // Chat State
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   
@@ -185,15 +191,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mediaFiles, setMediaFiles] = useState<MediaItem[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  // Friends State
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
-  // UI State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const toggleSidebar = () => setIsSidebarCollapsed(prev => !prev);
-
-  // --- DATA FETCHING HELPERS ---
 
   const refreshArticles = useCallback(async () => {
     try {
@@ -244,7 +246,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) { console.error(e); }
   }, []);
 
-  // 1. Initial Data Fetch (Split for performance)
   useEffect(() => {
     const initData = async () => {
         try {
@@ -268,7 +269,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initData();
   }, [refreshArticles, refreshThreads, refreshWall]);
 
-  // 2. Auth & User Specific Data Fetch
   useEffect(() => {
     const verifyAndFetchUserData = async () => {
         if (!token) {
@@ -310,7 +310,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     verifyAndFetchUserData();
   }, [token]);
 
-  // 3. Polling (Optimized)
   useEffect(() => {
       if (!token || currentUser.id === 'guest') return;
 
@@ -324,8 +323,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const interval = setInterval(poll, 3000);
       return () => clearInterval(interval);
   }, [token, currentUser.id, activeConversationId, refreshChat]);
-
-  // --- Helper Fetchers ---
 
   const fetchNotifications = async (userId: string) => {
       try {
@@ -360,7 +357,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (e) { console.error(e); }
   };
 
-  // --- Auth Functions ---
   const login = async (email: string, pass: string): Promise<boolean> => {
       setIsLoading(true);
       try {
@@ -467,8 +463,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
       } catch (e) { console.error(e); }
   };
-
-  // --- Content Creation ---
 
   const addArticle = async (article: Article) => {
     try {

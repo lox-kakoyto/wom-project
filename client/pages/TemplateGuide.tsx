@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Book, Code, Layers, Image, Video, Palette, Fingerprint, Music } from 'lucide-react';
+import { Book, Code, Layers, Image, Video, Palette, Fingerprint, Music, Swords, Trello } from 'lucide-react';
 
 const TemplateExample: React.FC<{ title: string, description: string, code: string, icon?: React.ReactNode }> = ({ title, description, code, icon }) => (
     <div className="mb-10 bg-wom-panel border border-white/10 rounded-xl overflow-hidden">
@@ -36,13 +36,57 @@ export const TemplateGuide: React.FC = () => {
             </p>
         </div>
 
+        {/* SECTION: TABS & INTERACTIVE */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Trello className="text-wom-primary" /> Интерактивные Вкладки
+        </h2>
+        
+        <TemplateExample 
+            title="Tabber (Переключатель Вкладок)"
+            description="Новая система вкладок. Вы можете выбрать один из 4 стилей: classic, cyberpunk, folder, pills. Теперь поддерживает вложенные картинки и видео без дублей!"
+            code={`{{Tabber
+|style=cyberpunk
+|Обычная Форма={{IMG2|File:Base.jpg|center|100%}}
+|Супер Форма={{IMG2|File:Super.jpg|center|100%}}
+|Видео Битвы={{Video|File:Fight.mp4|center|100%}}
+}}`}
+        />
+
+        <TemplateExample 
+            title="MusicTabber (Музыкальный Плеер)"
+            description="Специальный плеер для переключения музыкальных тем персонажа. Не конфликтует с обычным Tabber."
+            icon={<Music size={20} className="text-wom-accent" />}
+            code={`{{MusicTabber
+|Theme 1=File:Theme.mp3
+|Battle Theme=File:Battle.mp3
+|Sad Theme=File:Sad.mp3
+}}`}
+        />
+
+        {/* SECTION: BATTLE RESULTS */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Swords className="text-wom-primary" /> Результаты Битв (Колизей)
+        </h2>
+        <p className="text-gray-400 mb-6">Записывайте победы и поражения персонажей. Доступно 3 стиля: classic (таблица), cards (карточки), compact (список).</p>
+
+        <TemplateExample 
+            title="BattleResults (Результаты Битв)"
+            description="Шаблон для записи рекорда боев. Поддерживает ссылки на противников."
+            code={`{{BattleResults
+|style=cards
+|wins=[[Goku]] (Low Diff), [[Naruto]] (No Diff)
+|draws=[[Vegeta]] (Interrupted)
+|losses=[[Saitama]] (One Shot)
+}}`}
+        />
+
         {/* SECTION: MEDIA */}
         <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
             <Video className="text-wom-primary" /> Медиа (Видео и GIF)
         </h2>
         <TemplateExample 
             title="Video (Видео MP4)"
-            description="Вставка видеофайла. Поддерживает форматы MP4, WebM."
+            description="Вставка видеофайла. Теперь с красивой рамкой!"
             code={`{{Video|File:Name.mp4|right|300px}}`}
         />
         <TemplateExample 
@@ -58,12 +102,6 @@ File:Form1.jpg
 File:Form2.jpg
 File:Form3.jpg
 }}`}
-        />
-        <TemplateExample 
-            title="Musikbox (Аудиоплеер)"
-            description="Плеер для музыкальных тем персонажей. Файл должен быть формата MP3."
-            icon={<Music size={20} className="text-wom-accent" />}
-            code={`{{Musikbox|title=Theme of Hero|File:Theme.mp3}}`}
         />
 
         {/* SECTION: IDENTIFIERS */}
@@ -110,7 +148,7 @@ File:Form3.jpg
         </h2>
         <TemplateExample 
             title="Gradient (Градиентный Текст)"
-            description="Создание уникального текста способностей или имен."
+            description="Создание уникального текста способностей или имен. Исправлен баг с выравниванием!"
             code={`{{Gradient|Текст Способности|#ff0000|#0000ff}}`}
         />
 
@@ -127,16 +165,6 @@ File:Form3.jpg
 |border=#ef4444
 |bg=#1a0505
 |content=Текст внутри рамки...
-}}`}
-        />
-        <TemplateExample 
-            title="Tabber (Вкладки)"
-            description="Переключатель контента. Теперь поддерживает картинки и видео внутри вкладок! Можно задать width/height."
-            code={`{{Tabber
-|width=100%
-|height=400px
-|Версия 1={{IMG2|File:V1.jpg|center|100%}}
-|Версия 2={{Video|File:V2.mp4|center|100%}}
 }}`}
         />
 

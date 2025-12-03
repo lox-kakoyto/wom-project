@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  ChevronRight, AlertTriangle, Play, HelpCircle, CheckCircle, XCircle, 
-  Box, Shield, Zap, Skull, Crown, Info, ChevronUp, ChevronDown, 
-  Maximize, Minimize2, Image as ImageIcon, Music
+  ChevronRight, AlertTriangle, Info, CheckCircle, XCircle, 
+  Box, Shield, Zap, Skull, Crown, ChevronDown, 
+  Image as ImageIcon, Music, Trophy, MinusCircle, X,
+  Folder, Layers, Monitor, Disc
 } from 'lucide-react';
 import { MediaItem } from '../types';
 
@@ -48,9 +49,9 @@ export function parseArgs(inner: string) {
             parts.push(currentPart.trim());
             currentPart = '';
             continue;
+        } else {
+            currentPart += char;
         }
-
-        currentPart += char;
     }
     if (currentPart) parts.push(currentPart.trim());
 
@@ -63,7 +64,6 @@ export function parseArgs(inner: string) {
             const key = part.substring(0, eqIndex).trim();
             const val = part.substring(eqIndex + 1).trim();
             args[key] = val;
-            // Note: We removed auto-lowercasing to prevent duplicates in iteration
         } else {
             args[index] = part.trim();
         }
@@ -99,8 +99,6 @@ export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
   const inner = fullTemplate.slice(9, -2); // Remove {{Infobox and }}
   const { args } = parseArgs(inner);
   
-  // Clean up image url
-  // Handle mixed case since we removed auto-lowercase in parseArgs
   const imgKey = Object.keys(args).find(k => k.toLowerCase() === 'image');
   if (imgKey) {
      let val = args[imgKey];
@@ -116,25 +114,23 @@ export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
    ============================================================================ */
 
 const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ text, mediaFiles }) => {
-    // Check if text looks like a block (has newlines or headers)
     const hasBlockElements = text.includes('\n') || text.includes('==') || text.startsWith('* ');
 
     const processInline = (str: string) => {
-        // Bold
         const boldParts = str.split("'''");
         return boldParts.map((part, idx) => {
              if (idx % 2 === 1) return <b key={`b-${idx}`} className="text-white font-bold">{part}</b>;
-             // Italics
+             
              const italicParts = part.split("''");
              return italicParts.map((ip, idx2) => {
                  if (idx2 % 2 === 1) return <i key={`i-${idx}-${idx2}`} className="text-gray-300 italic">{ip}</i>;
-                 // Links [[Page]] or [[Page|Text]]
+                 
                  const linkParts = ip.split(/(\[\[.*?\]\])/g);
                  return linkParts.map((lp, idx3) => {
                      if (lp.startsWith('[[') && lp.endsWith(']]')) {
                          const content = lp.slice(2, -2);
                          const [target, label] = content.split('|');
-                         if(target.startsWith('File:')) return null; // Skip raw images in text
+                         if(target.startsWith('File:')) return null; 
                          return (
                              <Link key={idx3} to={`/wiki/${target.toLowerCase().replace(/ /g, '-')}`} className="text-wom-primary hover:text-white hover:underline transition-colors">
                                  {label || target}
@@ -148,7 +144,7 @@ const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ te
     };
 
     if (!hasBlockElements) {
-        return <span className="text-gray-300 leading-relaxed text-sm md:text-base">{processInline(text)}</span>;
+        return <span className="text-gray-300 leading-relaxed text-sm md:text-base align-middle">{processInline(text)}</span>;
     }
 
     const lines = text.split('\n');
@@ -175,31 +171,228 @@ const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ te
     )
 }
 
-const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], mediaFiles: MediaItem[], width?: string, height?: string }> = ({ tabs, mediaFiles, width, height }) => {
+/* --- TABBER (4 Styles) --- */
+const TabberComponent: React.FC<{ 
+    tabs: {title: string, content: string}[], 
+    mediaFiles: MediaItem[], 
+    style?: string, 
+    width?: string, 
+    height?: string 
+}> = ({ tabs, mediaFiles, style = 'classic', width, height }) => {
     const [activeTab, setActiveTab] = useState(0);
     if (tabs.length === 0) return null;
 
+    // Styles configuration
+    const styles: Record<string, any> = {
+        classic: {
+            container: "border border-white/10 bg-black/40 rounded-lg overflow-hidden",
+            nav: "bg-white/5 border-b border-white/10 flex overflow-x-auto",
+            btnActive: "bg-wom-primary text-white border-b-2 border-white font-bold",
+            btnInactive: "text-gray-400 hover:bg-white/10 hover:text-white",
+            content: "p-4",
+            icon: <Layers size={14} className="inline mr-2" />
+        },
+        cyberpunk: {
+            container: "border-2 border-wom-accent/50 bg-[#050308] shadow-[0_0_15px_rgba(217,70,239,0.2)] skew-x-[-2deg]",
+            nav: "flex border-b-2 border-wom-accent/30 bg-black overflow-x-auto",
+            btnActive: "bg-wom-accent text-black font-black uppercase tracking-widest clip-path-slant",
+            btnInactive: "text-wom-accent font-bold uppercase tracking-widest hover:text-white hover:bg-wom-accent/20",
+            content: "p-6 relative bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] skew-x-[2deg]",
+            icon: <Monitor size={14} className="inline mr-2" />
+        },
+        folder: {
+            container: "mt-2 pt-2",
+            nav: "flex space-x-1 px-2 overflow-x-auto",
+            btnActive: "bg-wom-panel text-white rounded-t-lg border-t border-x border-white/20 mb-[-1px] pb-2 pt-2 px-4 z-10 font-bold shadow-[0_-5px_10px_rgba(0,0,0,0.5)]",
+            btnInactive: "bg-white/5 text-gray-500 rounded-t-lg border-t border-x border-transparent hover:bg-white/10 pb-2 pt-2 px-4",
+            content: "bg-wom-panel border border-white/20 rounded-b-lg rounded-tr-lg p-4 relative z-0 shadow-lg",
+            icon: <Folder size={14} className="inline mr-2" />
+        },
+        pills: {
+            container: "bg-transparent",
+            nav: "flex space-x-2 bg-black/30 p-1 rounded-full w-fit mb-4 mx-auto border border-white/10 overflow-x-auto max-w-full",
+            btnActive: "bg-wom-primary text-white shadow-lg rounded-full font-bold px-6",
+            btnInactive: "text-gray-400 hover:text-white rounded-full hover:bg-white/5 px-4",
+            content: "bg-wom-panel/50 border border-white/5 rounded-2xl p-6 shadow-xl backdrop-blur-sm",
+            icon: <Box size={14} className="inline mr-2" />
+        }
+    };
+
+    const currentStyle = styles[style] || styles.classic;
+
     return (
-        // Changed overflow-hidden to flow-root to establish block formatting context for floats without clipping
-        <div className="my-6 border border-white/10 rounded-xl bg-black/20 shadow-lg flow-root clear-both" style={{ width: width || '100%' }}>
-            <div className="flex border-b border-white/10 overflow-x-auto bg-black/40 custom-scrollbar">
-                {tabs.map((tab, i) => (
-                    <button
-                        key={i}
-                        onClick={() => setActiveTab(i)}
-                        className={`px-6 py-3 text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
-                            activeTab === i 
-                            ? 'bg-wom-primary text-white border-b-2 border-wom-accent' 
-                            : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                        }`}
-                    >
-                        {tab.title}
-                    </button>
-                ))}
+        <div className={`my-6 flow-root clear-both`} style={{ width: width || '100%' }}>
+            <div className={currentStyle.container}>
+                <div className={`custom-scrollbar ${currentStyle.nav}`}>
+                    {tabs.map((tab, i) => (
+                        <button
+                            key={i}
+                            onClick={() => setActiveTab(i)}
+                            className={`px-4 py-3 text-sm transition-all whitespace-nowrap flex items-center justify-center ${
+                                activeTab === i ? currentStyle.btnActive : currentStyle.btnInactive
+                            }`}
+                        >
+                            {activeTab === i && currentStyle.icon}
+                            {tab.title}
+                        </button>
+                    ))}
+                </div>
+                <div className={`${currentStyle.content}`} style={{ minHeight: height || 'auto' }}>
+                    <div className="animate-fade-in">
+                        <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
+                    </div>
+                </div>
             </div>
-            <div className="p-4 bg-wom-panel/50 relative flow-root" style={{ minHeight: height || 'auto' }}>
-                 {/* Re-render content when tab changes */}
-                <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
+        </div>
+    );
+};
+
+/* --- MUSIC TABBER --- */
+const MusicTabber: React.FC<{ tracks: {title: string, url: string}[], style?: string }> = ({ tracks, style }) => {
+    const [currentTrack, setCurrentTrack] = useState(0);
+    const audioRef = React.useRef<HTMLAudioElement>(null);
+
+    const playTrack = (index: number) => {
+        setCurrentTrack(index);
+        if(audioRef.current) {
+            audioRef.current.load();
+            audioRef.current.play().catch(e => console.log("Auto-play blocked", e));
+        }
+    };
+    
+    return (
+        <div className="my-6 border border-wom-primary/30 rounded-xl overflow-hidden bg-black/80 shadow-[0_0_20px_rgba(168,85,247,0.15)] clear-both max-w-lg mx-auto md:float-right md:ml-6 md:w-80">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-wom-primary/20 to-wom-accent/10 p-3 border-b border-wom-primary/20 flex items-center justify-between backdrop-blur-md">
+                <span className="text-xs font-bold text-wom-primary uppercase tracking-widest flex items-center gap-2">
+                    <Music size={14} /> Musikbox
+                </span>
+                <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                </div>
+            </div>
+            
+            <div className="p-6 flex flex-col items-center text-center relative overflow-hidden">
+                {/* Visualizer Background Effect */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 animate-pulse-slow pointer-events-none"></div>
+
+                <div className="w-32 h-32 rounded-full border-4 border-wom-primary/30 p-1 mb-4 relative group">
+                     <div className="w-full h-full rounded-full bg-gradient-to-br from-wom-primary to-wom-accent flex items-center justify-center overflow-hidden shadow-inner relative z-10 animate-[spin_10s_linear_infinite]">
+                         <Disc size={64} className="text-white opacity-80" />
+                     </div>
+                     <div className="absolute inset-0 rounded-full border border-wom-accent animate-ping opacity-20"></div>
+                </div>
+
+                <h3 className="font-bold text-white text-lg mb-1 truncate w-full">{tracks[currentTrack]?.title || 'Select Track'}</h3>
+                <p className="text-xs text-wom-primary mb-6 uppercase tracking-wider">Now Playing</p>
+                
+                <audio 
+                    ref={audioRef}
+                    controls 
+                    src={tracks[currentTrack]?.url} 
+                    className="w-full h-8 mb-6 filter invert opacity-80" 
+                />
+
+                <div className="w-full space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                    {tracks.map((t, i) => (
+                        <button 
+                            key={i}
+                            onClick={() => playTrack(i)}
+                            className={`w-full text-left px-3 py-2 rounded text-xs font-bold transition-all flex justify-between items-center ${
+                                currentTrack === i 
+                                ? 'bg-wom-primary text-white shadow-lg' 
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                        >
+                            <span className="truncate">{i + 1}. {t.title}</span>
+                            {currentTrack === i && <Music size={10} className="animate-bounce" />}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* --- BATTLE RESULTS --- */
+const BattleResults: React.FC<{ 
+    wins: string, 
+    draws: string, 
+    losses: string, 
+    style?: string,
+    borderColor?: string,
+    textColor?: string,
+    bgColor?: string,
+    mediaFiles: MediaItem[]
+}> = ({ wins, draws, losses, style = 'classic', borderColor, textColor, bgColor, mediaFiles }) => {
+    
+    // Default colors if not provided
+    const bd = borderColor || '#ffffff1a'; // white/10
+    const txt = textColor || '#e5e7eb'; // gray-200
+    const bg = bgColor || '#00000066'; // black/40
+
+    const renderBlock = (title: string, content: string, icon: React.ReactNode, colorClass: string, bgClass: string) => (
+        <div className={`flex-1 min-w-[120px] h-full ${bgClass} rounded-lg p-4 border border-white/5`}>
+            <div className={`text-xs font-black uppercase tracking-widest mb-3 flex items-center justify-center gap-2 border-b border-white/10 pb-2 ${colorClass}`}>
+                {icon} {title}
+            </div>
+            <div className="text-sm leading-relaxed text-center" style={{ color: txt }}>
+                 <WikitextRenderer content={content || '-'} mediaFiles={mediaFiles} />
+            </div>
+        </div>
+    );
+
+    if (style === 'cards') {
+        return (
+            <div className="my-8 clear-both">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {renderBlock('Victories', wins, <Trophy size={16} />, 'text-green-400', 'bg-green-900/20')}
+                    {renderBlock('Draws', draws, <MinusCircle size={16} />, 'text-yellow-400', 'bg-yellow-900/20')}
+                    {renderBlock('Defeats', losses, <X size={16} />, 'text-red-400', 'bg-red-900/20')}
+                </div>
+                <div className="text-[10px] text-center mt-2 text-gray-600 uppercase tracking-widest">Battle Record</div>
+            </div>
+        )
+    }
+
+    if (style === 'compact') {
+        return (
+             <div className="my-6 border-l-4 border-wom-primary bg-white/5 p-4 rounded-r-lg clear-both shadow-lg" style={{ backgroundColor: bg }}>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 divide-y md:divide-y-0 md:divide-x divide-white/10">
+                    <div className="px-2">
+                        <span className="text-green-400 font-bold text-xs uppercase block mb-1">Wins</span>
+                        <div style={{ color: txt }}><WikitextRenderer content={wins || '-'} mediaFiles={mediaFiles} /></div>
+                    </div>
+                    <div className="px-2 pt-4 md:pt-0">
+                        <span className="text-yellow-400 font-bold text-xs uppercase block mb-1">Draws</span>
+                        <div style={{ color: txt }}><WikitextRenderer content={draws || '-'} mediaFiles={mediaFiles} /></div>
+                    </div>
+                    <div className="px-2 pt-4 md:pt-0">
+                        <span className="text-red-400 font-bold text-xs uppercase block mb-1">Losses</span>
+                        <div style={{ color: txt }}><WikitextRenderer content={losses || '-'} mediaFiles={mediaFiles} /></div>
+                    </div>
+                 </div>
+             </div>
+        )
+    }
+
+    // Classic Table Style
+    return (
+        <div className="my-8 border rounded-xl overflow-hidden clear-both shadow-lg" style={{ borderColor: bd, backgroundColor: bg }}>
+            <div className="bg-white/5 p-2 text-center text-xs font-bold uppercase tracking-widest text-gray-500 border-b" style={{ borderColor: bd }}>
+                Coliseum Record
+            </div>
+            <div className="grid grid-cols-3 text-center border-b" style={{ borderColor: bd, backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                <div className="p-3 font-black uppercase text-xs text-green-400 border-r tracking-wider" style={{ borderColor: bd }}>Wins</div>
+                <div className="p-3 font-black uppercase text-xs text-yellow-400 border-r tracking-wider" style={{ borderColor: bd }}>Draws</div>
+                <div className="p-3 font-black uppercase text-xs text-red-400 tracking-wider">Losses</div>
+            </div>
+            <div className="grid grid-cols-3 divide-x" style={{ borderColor: bd }}>
+                <div className="p-4 text-center text-sm" style={{ color: txt }}><WikitextRenderer content={wins || '-'} mediaFiles={mediaFiles} /></div>
+                <div className="p-4 text-center text-sm" style={{ color: txt }}><WikitextRenderer content={draws || '-'} mediaFiles={mediaFiles} /></div>
+                <div className="p-4 text-center text-sm" style={{ color: txt }}><WikitextRenderer content={losses || '-'} mediaFiles={mediaFiles} /></div>
             </div>
         </div>
     );
@@ -212,7 +405,6 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], medi
 export function WikitextRenderer({ content, mediaFiles }: { content: string, mediaFiles: MediaItem[] }) {
   
   let cleanContent = content;
-  // Strip top-level infobox if detected
   const infoboxMatch = content.match(/{{Infobox[\s\S]*?}}/i);
   if (infoboxMatch && infoboxMatch.index !== undefined && infoboxMatch.index < 50) {
       cleanContent = content.replace(infoboxMatch[0], '').trim();
@@ -257,8 +449,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
            const { parts: splitParts, args } = parseArgs(inner);
            const templateName = splitParts[0].trim();
            
-           /* --- MEDIA TEMPLATES --- */
-
+           /* --- MEDIA TEMPLATES (IMG2, GIF, Video) --- */
            if (['IMG2', 'GIF', 'Video'].includes(templateName)) {
                const filename = splitParts[1]?.trim();
                const isVideo = templateName === 'Video';
@@ -281,13 +472,18 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
 
                return (
                    <div key={index} className={`${floatClass} relative group z-10`} style={{ width: width, maxWidth: '100%' }}>
-                       {/* REMOVED: purple border and padding wrapper */}
-                       <div className="rounded overflow-hidden">
-                           {isVideo ? (
-                               <video src={url} controls className="w-full h-auto" />
-                           ) : (
-                               <img src={url} alt={filename} className="w-full h-auto object-contain max-h-[600px]" />
-                           )}
+                       {/* RESTORED FRAME: Stylish Container */}
+                       <div className="p-1.5 bg-[#151515] border border-white/10 rounded-lg shadow-2xl">
+                           <div className="rounded overflow-hidden bg-black border border-white/5 relative">
+                                {isVideo ? (
+                                    <video src={url} controls className="w-full h-auto" />
+                                ) : (
+                                    <img src={url} alt={filename} className="w-full h-auto object-contain max-h-[600px]" />
+                                )}
+                                {/* Corner Accents */}
+                                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-wom-primary opacity-50"></div>
+                                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-wom-primary opacity-50"></div>
+                           </div>
                        </div>
                    </div>
                );
@@ -304,9 +500,9 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                if (align === 'center') floatClass = 'float-none mx-auto block mb-6 clear-both';
 
                return (
-                   <div key={index} className={`${floatClass} relative group overflow-hidden rounded bg-black z-10`} style={{ width: width, maxWidth: '100%' }}>
-                       <img src={img1} className="w-full h-auto object-cover transition-opacity duration-300 group-hover:opacity-0" alt="Base" />
-                       <img src={img2} className="w-full h-auto object-cover absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" alt="Hover" />
+                   <div key={index} className={`${floatClass} relative group overflow-hidden rounded bg-black z-10 border-2 border-white/10 p-1 bg-black/40 shadow-lg`} style={{ width: width, maxWidth: '100%' }}>
+                       <img src={img1} className="w-full h-auto object-cover transition-opacity duration-300 group-hover:opacity-0 rounded-sm" alt="Base" />
+                       <img src={img2} className="w-full h-auto object-cover absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 rounded-sm m-1" alt="Hover" />
                    </div>
                );
            }
@@ -318,6 +514,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 const from = args['2'] || splitParts[2] || '#a855f7';
                 const to = args['3'] || splitParts[3] || '#d946ef';
                 return (
+                    // FIXED GRADIENT ALIGNMENT
                     <span key={index} 
                         style={{ 
                             background: `linear-gradient(to right, ${from}, ${to})`,
@@ -325,7 +522,9 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                             backgroundClip: 'text',
                             color: 'transparent',
                             fontWeight: 'bold',
-                            display: 'inline'
+                            display: 'inline-block', 
+                            verticalAlign: 'bottom', // Ensures it sits on the baseline
+                            lineHeight: '1.2'
                         }}
                     >
                         {text}
@@ -333,27 +532,58 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 );
            }
 
-           if (templateName === 'Musikbox') {
-               const title = args['title'] || 'Audio Track';
-               const filename = splitParts[1]?.trim() || args['1'];
-               const url = findMediaUrl(filename, mediaFiles);
+           /* --- TABBER (Rewritten) --- */
+
+           if (templateName === 'Tabber') {
+               const tabs: {title: string, content: string}[] = [];
+               const width = args['width'];
+               const height = args['height'];
+               const style = args['style'] || 'classic'; 
+
+               Object.keys(args).forEach(key => {
+                   if (['width', 'height', 'style'].includes(key)) return;
+                   if (isNaN(parseInt(key))) {
+                       tabs.push({ title: key, content: args[key] });
+                   }
+               });
                
-               return (
-                   <div key={index} className="my-4 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center gap-4 clear-both max-w-md">
-                       <div className="w-10 h-10 bg-wom-primary/20 rounded-full flex items-center justify-center shrink-0">
-                           <Music size={20} className="text-wom-primary ml-1" />
-                       </div>
-                       <div className="flex-1 min-w-0">
-                           <div className="font-bold text-sm text-white truncate mb-1">{title}</div>
-                           <audio controls src={url} className="w-full h-8" />
-                       </div>
-                   </div>
-               );
+               return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} width={width} height={height} style={style} />;
            }
 
-           /* --- ID TEMPLATES (V1, V2, V3) --- */
+           /* --- MUSIC TABBER (New) --- */
 
-           // V1: Cyber/Tech
+           if (templateName === 'MusicTabber') {
+               const tracks: {title: string, url: string}[] = [];
+               const style = args['style'];
+
+               Object.keys(args).forEach(key => {
+                   if (['style'].includes(key)) return;
+                   // Assuming format: SongTitle = File:Song.mp3
+                   if (isNaN(parseInt(key))) {
+                       tracks.push({ title: key, url: findMediaUrl(args[key], mediaFiles) });
+                   }
+               });
+               return <MusicTabber key={index} tracks={tracks} style={style} />
+           }
+
+           /* --- BATTLE RESULTS (New) --- */
+           
+           if (templateName === 'BattleResults') {
+                return <BattleResults 
+                    key={index}
+                    wins={args['wins']}
+                    draws={args['draws']}
+                    losses={args['losses']}
+                    style={args['style']}
+                    borderColor={args['borderColor']}
+                    textColor={args['textColor']}
+                    bgColor={args['bgColor']}
+                    mediaFiles={mediaFiles}
+                />
+           }
+
+           /* --- ID TEMPLATES --- */
+
            if (templateName === 'IDV1') {
                 const title = args['title'] || 'IDENTIFIER';
                 const name = args['name'] || 'Unknown';
@@ -363,13 +593,10 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 
                 return (
                     <div key={index} className="float-right ml-6 mb-4 w-72 bg-black border-2 relative overflow-hidden group shadow-lg z-10" style={{ borderColor: color }}>
-                        {/* Scanline Effect */}
                         <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] pointer-events-none opacity-20 z-20"></div>
-                        
                         <div className="bg-white/5 p-2 border-b" style={{ borderColor: color }}>
                             <div className="text-xs font-mono uppercase tracking-[0.2em] text-right" style={{ color: color }}>// {title} //</div>
                         </div>
-                        
                         <div className="relative h-64 overflow-hidden">
                             <img src={image} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" alt="ID" />
                             <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black/80 to-transparent">
@@ -381,7 +608,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                 );
            }
 
-           // V2: Scroll/Mystic
            if (templateName === 'IDV2') {
                const name = args['name'] || 'Name';
                const title = args['title'] || 'Title';
@@ -405,7 +631,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                );
            }
 
-           // V3: Modern/Card
            if (templateName === 'IDV3') {
                const name = args['name'] || 'NAME';
                const stats = args['stats'] || '';
@@ -428,20 +653,15 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                );
            }
 
-           /* --- LAYOUT & STRUCTURE --- */
-
            if (templateName === 'Gallery') {
                const title = args['title'] || splitParts[1] || 'Gallery';
                const content = args['content'] || splitParts.slice(2).join('\n');
-               
-               // Manually extract File: links from content args if provided as positional
                const images: string[] = [];
                if (!args['content']) {
                     splitParts.forEach((p, i) => {
                         if(i > 1 && p.includes('File:')) images.push(p.trim());
                     });
                } else {
-                   // Try to regex parse if passed as content block
                    const matches = content.match(/File:[^|\n\]]+/g);
                    if (matches) matches.forEach(m => images.push(m));
                }
@@ -465,23 +685,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                        </div>
                    </details>
                );
-           }
-
-           if (templateName === 'Tabber') {
-               const tabs: {title: string, content: string}[] = [];
-               const width = args['width'];
-               const height = args['height'];
-
-               // Fix duplication: Only use original keys since we disabled auto-lowercase in parseArgs
-               Object.keys(args).forEach(key => {
-                   if (key === 'width' || key === 'height') return;
-                   // Filter out numeric keys generated by split if they duplicate named keys
-                   if (isNaN(parseInt(key))) {
-                       tabs.push({ title: key, content: args[key] });
-                   }
-               });
-               
-               return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} width={width} height={height} />;
            }
 
            if (templateName === 'Spoiler' || templateName === 'SpoilerList') {
@@ -555,7 +758,6 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
         }
       })}
       
-      {/* Clearfix to ensure floated images don't bleed into comments */}
       <div className="clear-both table"></div>
     </div>
   );

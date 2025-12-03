@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ChevronRight, AlertTriangle, Info, CheckCircle, XCircle, 
   Box, Shield, Zap, Skull, Crown, ChevronDown, 
   Image as ImageIcon, Music, Trophy, MinusCircle, X,
-  Folder, Layers, Monitor, Disc
+  Folder, Layers, Monitor, Disc, Play, Pause, Volume2
 } from 'lucide-react';
 import { MediaItem } from '../types';
 
@@ -144,7 +144,8 @@ const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ te
     };
 
     if (!hasBlockElements) {
-        return <span className="text-gray-300 leading-relaxed text-sm md:text-base align-middle">{processInline(text)}</span>;
+        // Essential for gradients: span must be inline to flow correctly
+        return <span className="text-gray-300 leading-relaxed text-sm md:text-base align-baseline">{processInline(text)}</span>;
     }
 
     const lines = text.split('\n');
@@ -316,6 +317,47 @@ const MusicTabber: React.FC<{ tracks: {title: string, url: string}[], style?: st
     );
 }
 
+/* --- COMPACT AUDIO (New Type) --- */
+const CompactAudio: React.FC<{ file: string, align: string }> = ({ file, align }) => {
+    const [isPlaying, setIsPlaying] = useState(false);
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    let floatClass = 'float-right ml-6 mb-4';
+    if (align === 'left') floatClass = 'float-left mr-6 mb-4';
+    if (align === 'center') floatClass = 'float-none mx-auto block mb-6 clear-both';
+
+    return (
+        <div className={`${floatClass} w-[300px] max-w-full -mt-5 relative z-20`}>
+             <div className="bg-[#151515] border border-white/10 rounded-b-lg p-2 flex items-center gap-3 shadow-lg">
+                <button 
+                    onClick={togglePlay}
+                    className="w-8 h-8 rounded-full bg-wom-primary flex items-center justify-center text-white hover:bg-wom-accent transition-colors shrink-0"
+                >
+                    {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-bold truncate">Attached Audio</div>
+                    <div className="h-1 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                        <div className={`h-full bg-wom-primary ${isPlaying ? 'animate-[shimmer_2s_infinite]' : ''} w-full`}></div>
+                    </div>
+                </div>
+                <Volume2 size={16} className="text-gray-500" />
+                <audio ref={audioRef} src={file} onEnded={() => setIsPlaying(false)} />
+             </div>
+        </div>
+    );
+};
+
 /* --- BATTLE RESULTS --- */
 const BattleResults: React.FC<{ 
     wins: string, 
@@ -473,7 +515,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                return (
                    <div key={index} className={`${floatClass} relative group z-10`} style={{ width: width, maxWidth: '100%' }}>
                        {/* RESTORED FRAME: Stylish Container */}
-                       <div className="p-1.5 bg-[#151515] border border-white/10 rounded-lg shadow-2xl">
+                       <div className="p-1.5 bg-[#151515] border border-white/10 rounded-lg shadow-2xl relative z-20">
                            <div className="rounded overflow-hidden bg-black border border-white/5 relative">
                                 {isVideo ? (
                                     <video src={url} controls className="w-full h-auto" />
@@ -487,6 +529,13 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                        </div>
                    </div>
                );
+           }
+           
+           /* --- COMPACT AUDIO PLAYER --- */
+           if (templateName === 'CompactAudio') {
+               const file = findMediaUrl(args['1'] || splitParts[1], mediaFiles);
+               const align = args['align'] || 'center';
+               return <CompactAudio key={index} file={file} align={align} />;
            }
 
            if (templateName === 'HoverImage') {
@@ -509,27 +558,55 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
 
            /* --- TEXT & DECORATION --- */
 
-           if (templateName === 'Gradient') {
+           if (templateName === 'Color' || templateName === 'Gradient') {
                 const text = args['1'] || splitParts[1] || 'Text';
-                const from = args['2'] || splitParts[2] || '#a855f7';
-                const to = args['3'] || splitParts[3] || '#d946ef';
+                const color1 = args['2'] || splitParts[2] || '#fff';
+                const color2 = args['3'] || splitParts[3]; // Optional second color for gradient
+                
+                const style: React.CSSProperties = {
+                     fontWeight: 'bold',
+                     display: 'inline', // Critical for text flow
+                     WebkitBoxDecorationBreak: 'clone',
+                     boxDecorationBreak: 'clone',
+                };
+
+                if (color2) {
+                     style.background = `linear-gradient(to right, ${color1}, ${color2})`;
+                     style.WebkitBackgroundClip = 'text';
+                     style.backgroundClip = 'text';
+                     style.color = 'transparent';
+                } else {
+                     style.color = color1;
+                }
+
                 return (
-                    // FIXED GRADIENT ALIGNMENT
-                    <span key={index} 
-                        style={{ 
-                            background: `linear-gradient(to right, ${from}, ${to})`,
-                            WebkitBackgroundClip: 'text',
-                            backgroundClip: 'text',
-                            color: 'transparent',
-                            fontWeight: 'bold',
-                            display: 'inline-block', 
-                            verticalAlign: 'bottom', // Ensures it sits on the baseline
-                            lineHeight: '1.2'
-                        }}
-                    >
+                    <span key={index} style={style}>
                         {text}
                     </span>
                 );
+           }
+
+           /* --- FURIGANA (RUBY) --- */
+           if (templateName === 'Ruby' || templateName === 'Furigana') {
+               const base = args['1'] || splitParts[1] || 'Base';
+               const top = args['2'] || splitParts[2] || 'Top';
+               const color = args['color'] || '#a855f7';
+               const size = args['size'] || '50%';
+               const bold = args['bold'] === 'true' ? 'bold' : 'normal';
+
+               return (
+                   <ruby key={index} className="group mx-1">
+                       {base}
+                       <rt style={{ 
+                           color: color, 
+                           fontSize: size, 
+                           fontWeight: bold,
+                           userSelect: 'none'
+                        }}>
+                            {top}
+                        </rt>
+                   </ruby>
+               );
            }
 
            /* --- TABBER (Rewritten) --- */
@@ -548,6 +625,33 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                });
                
                return <TabberComponent key={index} tabs={tabs} mediaFiles={mediaFiles} width={width} height={height} style={style} />;
+           }
+
+           /* --- UNIVERSAL SPOILER BLOCK --- */
+           if (templateName === 'SpoilerBlock') {
+               const align = args['align'] || args['Расположение'] || 'center';
+               const bg = args['bg'] || args['Код цвета фона'] || 'transparent';
+               const color = args['color'] || args['Код цвета текста'] || '#e5e7eb';
+               const openText = args['title'] || args['Открытое'] || 'Open';
+               const closedContent = args['content'] || args['Закрытое'] || '';
+               const border = args['border'] || args['Обводка'] || 'transparent';
+
+               const alignmentClass = align === 'center' ? 'mx-auto' : align === 'left' ? 'mr-auto' : 'ml-auto';
+
+               return (
+                   <details key={index} className={`my-4 max-w-2xl ${alignmentClass} group rounded-lg overflow-hidden border transition-all duration-300 open:bg-black/20`} style={{ backgroundColor: bg, borderColor: border }}>
+                       <summary 
+                          className="cursor-pointer p-3 font-bold text-center list-none select-none hover:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                          style={{ color: color }}
+                        >
+                            <span className="group-open:rotate-90 transition-transform duration-200"><ChevronRight size={14} /></span>
+                            <WikitextRenderer content={openText} mediaFiles={mediaFiles} />
+                       </summary>
+                       <div className="p-4 border-t border-white/5 text-sm" style={{ color: color }}>
+                           <WikitextRenderer content={closedContent} mediaFiles={mediaFiles} />
+                       </div>
+                   </details>
+               )
            }
 
            /* --- MUSIC TABBER (New) --- */

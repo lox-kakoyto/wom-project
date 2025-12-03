@@ -5,6 +5,32 @@ import { API_URL } from '../constants';
 
 const TEMPLATES: WikiTemplate[] = [
   {
+    name: 'Color / Gradient',
+    description: 'Text color or gradient (if 2 colors provided).',
+    content: `{{Color|Text|#ff0000|#0000ff}}`
+  },
+  {
+    name: 'Ruby (Furigana)',
+    description: 'Small text above main text.',
+    content: `{{Ruby|Base Text|Reading|color=#a855f7}}`
+  },
+  {
+    name: 'CompactAudio',
+    description: 'Small player that attaches to media above it.',
+    content: `{{CompactAudio|File:Song.mp3|align=right}}`
+  },
+  {
+    name: 'SpoilerBlock',
+    description: 'Customizable collapsible block (Identifiers/Notes).',
+    content: `{{SpoilerBlock
+|title='''Identifier:''' Name
+|content=Notes here...
+|bg=transparent
+|color=#fff
+|align=center
+}}`
+  },
+  {
     name: 'Tabber (Advanced)',
     description: 'Switch content tabs. Styles: classic, cyberpunk, folder, pills.',
     content: `{{Tabber
@@ -76,11 +102,6 @@ const TEMPLATES: WikiTemplate[] = [
     name: 'Gallery',
     description: 'List of images.',
     content: `{{Gallery|title=Gallery|File:1.jpg|File:2.jpg}}`
-  },
-  {
-    name: 'Gradient',
-    description: 'Colored text.',
-    content: `{{Gradient|Text|#ff0000|#0000ff}}`
   },
   {
     name: 'Infobox',

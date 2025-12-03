@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Book, Code, Layers, Image, Video, Palette, Fingerprint, Music, Swords, Trello } from 'lucide-react';
+import { Book, Code, Layers, Image, Video, Palette, Fingerprint, Music, Swords, Trello, Type, AlignLeft } from 'lucide-react';
 
 const TemplateExample: React.FC<{ title: string, description: string, code: string, icon?: React.ReactNode }> = ({ title, description, code, icon }) => (
     <div className="mb-10 bg-wom-panel border border-white/10 rounded-xl overflow-hidden">
@@ -36,6 +36,67 @@ export const TemplateGuide: React.FC = () => {
             </p>
         </div>
 
+        {/* SECTION: TEXT DECORATION (NEW) */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Palette className="text-wom-primary" /> Оформление Текста
+        </h2>
+        
+        <TemplateExample 
+            title="Color / Gradient (Цвет и Градиент)"
+            description="Универсальный шаблон для покраски текста. Если указан один цвет - текст будет однотонным. Если два - создается градиент. Исправлена проблема с выравниванием (текст теперь на одной линии)."
+            code={`{{Color|Обычный Цвет|#ff0000}}
+{{Color|Градиентный Текст|#ff0000|#0000ff}}`}
+        />
+
+        <TemplateExample 
+            title="Ruby / Furigana (Фуригана)"
+            description="Маленький текст над основным. Идеально для перевода названий техник. Параметры размера и цвета настраиваются."
+            icon={<Type size={20} className="text-wom-accent" />}
+            code={`{{Ruby|Bankai|Tinsa Zangetsu|color=#a855f7|size=50%|bold=true}}`}
+        />
+
+        {/* SECTION: SPOILERS & STRUCTURE (NEW) */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <AlignLeft className="text-wom-primary" /> Блоки и Спойлеры
+        </h2>
+
+        <TemplateExample 
+            title="SpoilerBlock (Универсальный Блок)"
+            description="Раскрывающийся блок для заметок, идентификаторов или альтернативных версий. Поддерживает вложенность других шаблонов."
+            code={`{{SpoilerBlock
+|title='''Идентификатор:''' Халк
+|content=
+* '''Версия 1:''' Дикий Халк
+* '''Версия 2:''' Профессор Халк
+|bg=transparent
+|color=#fff
+|border=#00ff00
+|align=center
+}}`}
+        />
+
+        {/* SECTION: AUDIO */}
+        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
+            <Music className="text-wom-primary" /> Музыка
+        </h2>
+
+        <TemplateExample 
+            title="CompactAudio (Компактный Плеер)"
+            description="Тонкий плеер, который 'прилипает' к низу картинки или видео. Убирает отступы для цельного вида."
+            code={`{{IMG2|File:Hero.jpg|center|400px}}
+{{CompactAudio|File:Theme.mp3|align=center}}`}
+        />
+
+        <TemplateExample 
+            title="MusicTabber (Музыкальный Плеер)"
+            description="Плеер с плейлистом для переключения музыкальных тем."
+            code={`{{MusicTabber
+|Theme 1=File:Theme.mp3
+|Battle Theme=File:Battle.mp3
+|Sad Theme=File:Sad.mp3
+}}`}
+        />
+
         {/* SECTION: TABS & INTERACTIVE */}
         <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
             <Trello className="text-wom-primary" /> Интерактивные Вкладки
@@ -49,17 +110,6 @@ export const TemplateGuide: React.FC = () => {
 |Обычная Форма={{IMG2|File:Base.jpg|center|100%}}
 |Супер Форма={{IMG2|File:Super.jpg|center|100%}}
 |Видео Битвы={{Video|File:Fight.mp4|center|100%}}
-}}`}
-        />
-
-        <TemplateExample 
-            title="MusicTabber (Музыкальный Плеер)"
-            description="Специальный плеер для переключения музыкальных тем персонажа. Не конфликтует с обычным Tabber."
-            icon={<Music size={20} className="text-wom-accent" />}
-            code={`{{MusicTabber
-|Theme 1=File:Theme.mp3
-|Battle Theme=File:Battle.mp3
-|Sad Theme=File:Sad.mp3
 }}`}
         />
 
@@ -140,16 +190,6 @@ File:Form3.jpg
 |stats=HP: ∞ | MP: ∞
 |bg=#0f0c29
 }}`}
-        />
-
-        {/* SECTION: DECORATION */}
-        <h2 className="text-2xl font-bold text-wom-accent mb-6 flex items-center gap-2 border-t border-white/10 pt-8">
-            <Palette className="text-wom-primary" /> Оформление Текста
-        </h2>
-        <TemplateExample 
-            title="Gradient (Градиентный Текст)"
-            description="Создание уникального текста способностей или имен. Исправлен баг с выравниванием!"
-            code={`{{Gradient|Текст Способности|#ff0000|#0000ff}}`}
         />
 
         {/* SECTION: STRUCTURE */}

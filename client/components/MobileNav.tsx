@@ -1,13 +1,27 @@
+
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BookOpen, Swords, MessageSquare, User, Menu, X, Image, HelpCircle, ShieldAlert, Users } from 'lucide-react';
+import { Home, BookOpen, Swords, MessageSquare, User, Menu, X, Image, HelpCircle, ShieldAlert, Users, EyeOff, Eye } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UserRole } from '../types';
 
 export const MobileNav: React.FC = () => {
   const [showMenu, setShowMenu] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const { currentUser } = useData();
+
+  // If hidden, show a small floating button to restore
+  if (isHidden) {
+      return (
+          <button 
+             onClick={() => setIsHidden(false)}
+             className="md:hidden fixed bottom-4 left-4 z-50 p-3 bg-black/80 border border-white/10 rounded-full text-white shadow-lg backdrop-blur-md"
+          >
+              <Eye size={24} />
+          </button>
+      );
+  }
 
   return (
     <>
@@ -99,11 +113,20 @@ export const MobileNav: React.FC = () => {
                      <span className="text-sm font-bold text-white">Templates</span>
                   </NavLink>
 
+                  {/* Hide Menu Button for Immersive Mode */}
+                  <button 
+                    onClick={() => { setShowMenu(false); setIsHidden(true); }}
+                    className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-white/5 hover:border-wom-primary/50 transition-colors col-span-2"
+                  >
+                     <EyeOff size={24} className="mb-2 text-gray-400" />
+                     <span className="text-sm font-bold text-white">Hide Menu (Immersive)</span>
+                  </button>
+
                    {currentUser.role !== UserRole.USER && (
                       <NavLink 
                         to="/admin" 
                         onClick={() => setShowMenu(false)}
-                        className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-white/5 hover:border-wom-primary/50 transition-colors"
+                        className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-xl border border-white/5 hover:border-wom-primary/50 transition-colors col-span-2"
                       >
                         <ShieldAlert size={24} className="mb-2 text-red-400" />
                         <span className="text-sm font-bold text-white">Admin</span>

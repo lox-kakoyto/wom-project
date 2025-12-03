@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Book, Code, Layers, Image, Video, Palette, Fingerprint } from 'lucide-react';
+import { Book, Code, Layers, Image, Video, Palette, Fingerprint, Music } from 'lucide-react';
 
 const TemplateExample: React.FC<{ title: string, description: string, code: string, icon?: React.ReactNode }> = ({ title, description, code, icon }) => (
     <div className="mb-10 bg-wom-panel border border-white/10 rounded-xl overflow-hidden">
@@ -58,6 +58,12 @@ File:Form1.jpg
 File:Form2.jpg
 File:Form3.jpg
 }}`}
+        />
+        <TemplateExample 
+            title="Musikbox (Аудиоплеер)"
+            description="Плеер для музыкальных тем персонажей. Файл должен быть формата MP3."
+            icon={<Music size={20} className="text-wom-accent" />}
+            code={`{{Musikbox|title=Theme of Hero|File:Theme.mp3}}`}
         />
 
         {/* SECTION: IDENTIFIERS */}

@@ -127,7 +127,7 @@ const AnimatedRoutes: React.FC = () => {
 }
 
 const AppContent: React.FC = () => {
-  const { currentUser, isAuthenticated, logout, notifications, isLoading } = useData();
+  const { currentUser, isAuthenticated, logout, notifications, isLoading, isSidebarCollapsed } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -157,7 +157,7 @@ const AppContent: React.FC = () => {
 
         {!isAuthPage && <Sidebar />}
         
-        <div className={`flex-1 flex flex-col min-h-screen ${!isAuthPage ? 'md:ml-64' : ''}`}>
+        <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${!isAuthPage ? (isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64') : ''}`}>
           {!isAuthPage && (
               <header className="sticky top-0 z-30 bg-wom-bg/80 backdrop-blur-md border-b border-wom-primary/10 h-16 px-6 flex items-center justify-between">
                 <div className="md:hidden">

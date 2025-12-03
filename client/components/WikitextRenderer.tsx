@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ChevronRight, AlertTriangle, Play, HelpCircle, CheckCircle, XCircle, 
   Box, Shield, Zap, Skull, Crown, Info, ChevronUp, ChevronDown, 
-  Maximize, Minimize2, Image as ImageIcon
+  Maximize, Minimize2, Image as ImageIcon, Music
 } from 'lucide-react';
 import { MediaItem } from '../types';
 
@@ -62,7 +63,7 @@ export function parseArgs(inner: string) {
             const key = part.substring(0, eqIndex).trim();
             const val = part.substring(eqIndex + 1).trim();
             args[key] = val;
-            args[key.toLowerCase()] = val; 
+            // Note: We removed auto-lowercasing to prevent duplicates in iteration
         } else {
             args[index] = part.trim();
         }
@@ -99,8 +100,10 @@ export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
   const { args } = parseArgs(inner);
   
   // Clean up image url
-  if (args['image']) {
-     let val = args['image'];
+  // Handle mixed case since we removed auto-lowercase in parseArgs
+  const imgKey = Object.keys(args).find(k => k.toLowerCase() === 'image');
+  if (imgKey) {
+     let val = args[imgKey];
      val = val.replace(/[[\]]/g, '');
      args['image'] = findMediaUrl(val, mediaFiles);
   }
@@ -113,6 +116,41 @@ export function parseInfobox(content: string, mediaFiles: MediaItem[]) {
    ============================================================================ */
 
 const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ text, mediaFiles }) => {
+    // Check if text looks like a block (has newlines or headers)
+    const hasBlockElements = text.includes('\n') || text.includes('==') || text.startsWith('* ');
+
+    const processInline = (str: string) => {
+        // Bold
+        const boldParts = str.split("'''");
+        return boldParts.map((part, idx) => {
+             if (idx % 2 === 1) return <b key={`b-${idx}`} className="text-white font-bold">{part}</b>;
+             // Italics
+             const italicParts = part.split("''");
+             return italicParts.map((ip, idx2) => {
+                 if (idx2 % 2 === 1) return <i key={`i-${idx}-${idx2}`} className="text-gray-300 italic">{ip}</i>;
+                 // Links [[Page]] or [[Page|Text]]
+                 const linkParts = ip.split(/(\[\[.*?\]\])/g);
+                 return linkParts.map((lp, idx3) => {
+                     if (lp.startsWith('[[') && lp.endsWith(']]')) {
+                         const content = lp.slice(2, -2);
+                         const [target, label] = content.split('|');
+                         if(target.startsWith('File:')) return null; // Skip raw images in text
+                         return (
+                             <Link key={idx3} to={`/wiki/${target.toLowerCase().replace(/ /g, '-')}`} className="text-wom-primary hover:text-white hover:underline transition-colors">
+                                 {label || target}
+                             </Link>
+                         );
+                     }
+                     return lp;
+                 });
+             });
+        });
+    };
+
+    if (!hasBlockElements) {
+        return <span className="text-gray-300 leading-relaxed text-sm md:text-base">{processInline(text)}</span>;
+    }
+
     const lines = text.split('\n');
     return (
         <>
@@ -120,34 +158,6 @@ const MarkdownBlock: React.FC<{ text: string, mediaFiles: MediaItem[] }> = ({ te
                 if (line.startsWith('== ') && line.endsWith(' ==')) return <h2 key={i} className="text-2xl font-bold text-white border-b-2 border-wom-primary/50 pb-1 mb-4 mt-8 uppercase tracking-wide clear-both">{line.replace(/==/g, '').trim()}</h2>;
                 if (line.startsWith('=== ') && line.endsWith(' ===')) return <h3 key={i} className="text-xl font-bold text-wom-accent mb-2 mt-4 clear-both">{line.replace(/===/g, '').trim()}</h3>;
                 if (line.startsWith('----')) return <hr key={i} className="border-t border-white/20 my-6 clear-both" />;
-
-                const processInline = (str: string) => {
-                    // Bold
-                    const boldParts = str.split("'''");
-                    return boldParts.map((part, idx) => {
-                         if (idx % 2 === 1) return <b key={`b-${idx}`} className="text-white font-bold">{part}</b>;
-                         // Italics
-                         const italicParts = part.split("''");
-                         return italicParts.map((ip, idx2) => {
-                             if (idx2 % 2 === 1) return <i key={`i-${idx}-${idx2}`} className="text-gray-300 italic">{ip}</i>;
-                             // Links [[Page]] or [[Page|Text]]
-                             const linkParts = ip.split(/(\[\[.*?\]\])/g);
-                             return linkParts.map((lp, idx3) => {
-                                 if (lp.startsWith('[[') && lp.endsWith(']]')) {
-                                     const content = lp.slice(2, -2);
-                                     const [target, label] = content.split('|');
-                                     if(target.startsWith('File:')) return null; // Skip raw images in text
-                                     return (
-                                         <Link key={idx3} to={`/wiki/${target.toLowerCase().replace(/ /g, '-')}`} className="text-wom-primary hover:text-white hover:underline transition-colors">
-                                             {label || target}
-                                         </Link>
-                                     );
-                                 }
-                                 return lp;
-                             });
-                         });
-                    });
-                };
 
                 if (line.trim() === '') return <br key={i}/>;
 
@@ -170,7 +180,8 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], medi
     if (tabs.length === 0) return null;
 
     return (
-        <div className="my-6 border border-white/10 rounded-xl overflow-hidden bg-black/20 shadow-lg clear-both" style={{ width: width || '100%' }}>
+        // Changed overflow-hidden to flow-root to establish block formatting context for floats without clipping
+        <div className="my-6 border border-white/10 rounded-xl bg-black/20 shadow-lg flow-root clear-both" style={{ width: width || '100%' }}>
             <div className="flex border-b border-white/10 overflow-x-auto bg-black/40 custom-scrollbar">
                 {tabs.map((tab, i) => (
                     <button
@@ -186,7 +197,7 @@ const TabberComponent: React.FC<{ tabs: {title: string, content: string}[], medi
                     </button>
                 ))}
             </div>
-            <div className="p-4 bg-wom-panel/50 relative overflow-hidden" style={{ minHeight: height || 'auto' }}>
+            <div className="p-4 bg-wom-panel/50 relative flow-root" style={{ minHeight: height || 'auto' }}>
                  {/* Re-render content when tab changes */}
                 <WikitextRenderer content={tabs[activeTab].content} mediaFiles={mediaFiles} />
             </div>
@@ -270,11 +281,12 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
 
                return (
                    <div key={index} className={`${floatClass} relative group z-10`} style={{ width: width, maxWidth: '100%' }}>
-                       <div className="bg-wom-panel border border-wom-primary/30 p-1 rounded shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                       {/* REMOVED: purple border and padding wrapper */}
+                       <div className="rounded overflow-hidden">
                            {isVideo ? (
-                               <video src={url} controls className="w-full h-auto rounded" />
+                               <video src={url} controls className="w-full h-auto" />
                            ) : (
-                               <img src={url} alt={filename} className="w-full h-auto object-contain rounded max-h-[600px]" />
+                               <img src={url} alt={filename} className="w-full h-auto object-contain max-h-[600px]" />
                            )}
                        </div>
                    </div>
@@ -310,13 +322,33 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                         style={{ 
                             background: `linear-gradient(to right, ${from}, ${to})`,
                             WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            fontWeight: 'bold'
+                            backgroundClip: 'text',
+                            color: 'transparent',
+                            fontWeight: 'bold',
+                            display: 'inline'
                         }}
                     >
                         {text}
                     </span>
                 );
+           }
+
+           if (templateName === 'Musikbox') {
+               const title = args['title'] || 'Audio Track';
+               const filename = splitParts[1]?.trim() || args['1'];
+               const url = findMediaUrl(filename, mediaFiles);
+               
+               return (
+                   <div key={index} className="my-4 bg-white/5 border border-white/10 rounded-lg p-3 flex items-center gap-4 clear-both max-w-md">
+                       <div className="w-10 h-10 bg-wom-primary/20 rounded-full flex items-center justify-center shrink-0">
+                           <Music size={20} className="text-wom-primary ml-1" />
+                       </div>
+                       <div className="flex-1 min-w-0">
+                           <div className="font-bold text-sm text-white truncate mb-1">{title}</div>
+                           <audio controls src={url} className="w-full h-8" />
+                       </div>
+                   </div>
+               );
            }
 
            /* --- ID TEMPLATES (V1, V2, V3) --- */
@@ -440,8 +472,7 @@ export function WikitextRenderer({ content, mediaFiles }: { content: string, med
                const width = args['width'];
                const height = args['height'];
 
-               // Robust arg extraction: Only take named args that are not 'width' or 'height'
-               // OR positional args if defined as key=value in parseArgs logic
+               // Fix duplication: Only use original keys since we disabled auto-lowercase in parseArgs
                Object.keys(args).forEach(key => {
                    if (key === 'width' || key === 'height') return;
                    // Filter out numeric keys generated by split if they duplicate named keys

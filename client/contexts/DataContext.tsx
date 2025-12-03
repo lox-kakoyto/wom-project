@@ -60,6 +60,11 @@ const TEMPLATES: WikiTemplate[] = [
     content: `{{Gallery|title=Галерея|File:1.jpg|File:2.jpg}}`
   },
   {
+    name: 'Musikbox (Аудио)',
+    description: 'Аудиоплеер.',
+    content: `{{Musikbox|title=Theme Song|File:Song.mp3}}`
+  },
+  {
     name: 'Gradient (Градиент)',
     description: 'Цветной текст.',
     content: `{{Gradient|Текст|#ff0000|#0000ff}}`
@@ -124,6 +129,10 @@ interface DataContextType {
   friends: Friendship[];
   friendRequests: FriendRequest[];
 
+  // Sidebar State
+  isSidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+
   login: (email: string, pass: string) => Promise<boolean>;
   googleLogin: (token: string) => Promise<boolean>;
   register: (username: string, email: string, pass: string) => Promise<boolean>;
@@ -179,6 +188,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Friends State
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+
+  // UI State
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const toggleSidebar = () => setIsSidebarCollapsed(prev => !prev);
 
   // --- DATA FETCHING HELPERS ---
 
@@ -641,6 +654,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentUser, isAuthenticated: !!token, isLoading, users, articles, threads, 
       activeConversationMessages, wallPosts, notifications, templates: TEMPLATES, mediaFiles,
       friends, friendRequests,
+      isSidebarCollapsed, toggleSidebar,
       login, googleLogin, register, logout, updateUserProfile,
       addArticle, updateArticle, addThread, addThreadComment, addArticleComment, replyToArticleComment, 
       setActiveConversation, activeConversationId, sendMessage, 

@@ -1,9 +1,9 @@
 import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 
 // Using 127.0.0.1 is often more reliable than localhost on Windows to avoid "Failed to fetch" errors
-export const API_URL = 'https://wom-project.onrender.com';
+export const API_URL = '/api';
 
-export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; // Placeholder silhouette
+export const DEFAULT_AVATAR = "https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.flaticon.com%2Ffree-icon%2Fguest_647942&psig=AOvVaw0MAzAf8ZAtdIplgb_AgZYT&ust=1764841608031000&source=images&cd=vfe&opi=89978449&ved=0CBUQjRxqFwoTCNisntCRoZEDFQAAAAAdAAAAABAE"; // Placeholder silhouette
 
 export const CURRENT_USER: User = {
   id: 'u1',

@@ -1,4 +1,3 @@
-
 console.log("--- Starting WOM Server script... ---");
 
 import express from "express";
@@ -27,7 +26,6 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' })); 
 
 // Serve Static Files (Vite build output)
-// Changed from '../dist' to '../client/dist' based on logs
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 const JWT_SECRET = process.env.JWT_SECRET || "wom_secret_key_123";
@@ -37,7 +35,7 @@ const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Logger
 app.use((req, res, next) => {
-    // console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
     next();
 });
 
@@ -90,6 +88,7 @@ app.post("/auth/google", async (req, res) => {
 
 // REGISTER
 app.post("/auth/register", async (req, res) => {
+    console.log("Processing register request:", req.body.username, req.body.email);
     try {
         const { username, email, password } = req.body;
 
@@ -111,7 +110,7 @@ app.post("/auth/register", async (req, res) => {
         res.json({ token, user: newUser.rows[0] });
 
     } catch (err) {
-        console.error(err.message);
+        console.error("Register Error:", err.message);
         res.status(500).json({ error: "Server error during registration" });
     }
 });
@@ -155,7 +154,7 @@ app.get("/auth/me", async (req, res) => {
         
         try {
             const verified = jwt.verify(cleanToken, JWT_SECRET);
-            const userId = parseInt(verified.id); // Convert to number assuming SERIAL id
+            const userId = parseInt(verified.id);
             const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
             
             if (user.rows.length === 0) return res.json(null);
@@ -197,7 +196,7 @@ app.get("/users", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = parseInt(id); // Ensure integer for DB
+        const userId = parseInt(id);
         
         const { avatar, banner, bio } = req.body; 
         
@@ -246,12 +245,10 @@ app.post("/users/:id/watchlist", async (req, res) => {
 
 // --- FRIENDS ROUTES ---
 
-// Get Friends & Requests
 app.get("/friends/:userId", async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Get accepted friendships
         const friendsQuery = await pool.query(`
             SELECT f.id, u.id as friend_id, u.username, u.avatar, u.role, u.bio, f.created_at
             FROM friendships f
@@ -261,7 +258,6 @@ app.get("/friends/:userId", async (req, res) => {
             AND f.status = 'accepted'
         `, [userId]);
 
-        // Get pending requests (Incoming)
         const requestsQuery = await pool.query(`
             SELECT f.id, u.id as sender_id, u.username, u.avatar
             FROM friendships f
@@ -278,12 +274,10 @@ app.get("/friends/:userId", async (req, res) => {
     }
 });
 
-// Send Friend Request
 app.post("/friends/request", async (req, res) => {
     try {
         const { senderId, receiverId } = req.body;
         
-        // Check if exists
         const check = await pool.query(
             "SELECT * FROM friendships WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)",
             [senderId, receiverId]
@@ -298,7 +292,6 @@ app.post("/friends/request", async (req, res) => {
             [senderId, receiverId]
         );
 
-        // Notify Receiver
         await pool.query(
             "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'friend_request', 'New friend request', '/friends')",
             [receiverId]
@@ -310,7 +303,6 @@ app.post("/friends/request", async (req, res) => {
     }
 });
 
-// Accept Request
 app.post("/friends/accept", async (req, res) => {
     try {
         const { requestId } = req.body;
@@ -321,7 +313,6 @@ app.post("/friends/accept", async (req, res) => {
     }
 });
 
-// Reject/Delete Request
 app.post("/friends/reject", async (req, res) => {
     try {
         const { requestId } = req.body;
@@ -332,14 +323,11 @@ app.post("/friends/reject", async (req, res) => {
     }
 });
 
+// --- CHAT ROUTES ---
 
-// --- CHAT ROUTES (OPTIMIZED) ---
-
-// Get Messages for a specific ROOM (Active Chat)
 app.get("/chat/:roomId", async (req, res) => {
     try {
         const { roomId } = req.params;
-        // Limit to last 50 messages for efficiency
         const messages = await pool.query(
             "SELECT * FROM chat_messages WHERE room_id = $1 ORDER BY created_at ASC LIMIT 50",
             [roomId]
@@ -402,7 +390,6 @@ app.put("/notifications/:id/read", async (req, res) => {
     }
 });
 
-
 // ARTICLES
 app.get("/articles", async (req, res) => {
     try {
@@ -453,7 +440,6 @@ app.post("/articles", async (req, res) => {
              );
              result = updated.rows[0];
 
-             // --- NOTIFICATION LOGIC ---
              const watchers = await pool.query("SELECT id FROM users WHERE watchlist @> $1", [[slug]]);
              for (const watcher of watchers.rows) {
                  if (watcher.id.toString() !== authorId.toString()) {
@@ -489,7 +475,7 @@ app.post("/articles/comments", async (req, res) => {
     }
 });
 
-// COLISEUM (Threads)
+// COLISEUM
 app.get("/coliseum/threads", async (req, res) => {
     try {
         const threads = await pool.query("SELECT * FROM coliseum_threads ORDER BY created_at DESC");
@@ -552,7 +538,6 @@ app.post("/coliseum/comments", async (req, res) => {
 // WALL POSTS
 app.get("/wall", async (req, res) => {
     try {
-        // Simple Limit for now to prevent massive payloads
         const posts = await pool.query("SELECT * FROM wall_posts ORDER BY created_at DESC LIMIT 50");
         const comments = await pool.query("SELECT * FROM wall_comments ORDER BY created_at ASC");
 
@@ -591,7 +576,6 @@ app.post("/wall", async (req, res) => {
             [authorId, targetUserId, content]
         );
         
-        // Notify target user
         if (authorId !== targetUserId) {
             await pool.query(
                 "INSERT INTO notifications (user_id, type, content, link) VALUES ($1, 'message', 'New wall post from a user.', $2)",
@@ -650,9 +634,9 @@ app.post("/media", async (req, res) => {
     }
 });
 
-// Catch-all route to serve the React App
-// Also changed from '../dist' to '../client/dist'
-app.get('*', (req, res) => {
+// IMPORTANT: Fix for Express 5 catch-all route crashing with '*'
+// Using regex instead of string wildcard to be compatible with newer path-to-regexp
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
@@ -661,7 +645,6 @@ const initDB = async () => {
     try {
         console.log("[DB] Checking database tables...");
         
-        // Users
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -677,23 +660,20 @@ const initDB = async () => {
             );
         `);
 
-        // Friendships
         await pool.query(`
             CREATE TABLE IF NOT EXISTS friendships (
                 id SERIAL PRIMARY KEY,
                 user_id_1 INTEGER REFERENCES users(id),
                 user_id_2 INTEGER REFERENCES users(id),
-                status VARCHAR(20) DEFAULT 'pending', -- pending, accepted
+                status VARCHAR(20) DEFAULT 'pending', 
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
 
-        // Check for watchlist column if table existed but column didn't
         try {
             await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS watchlist TEXT[] DEFAULT '{}'`);
         } catch (e) { console.log("Watchlist column check skipped or failed", e.message); }
         
-        // Notifications
         await pool.query(`
             CREATE TABLE IF NOT EXISTS notifications (
                 id SERIAL PRIMARY KEY,
@@ -706,7 +686,6 @@ const initDB = async () => {
             );
         `);
 
-        // Articles
         await pool.query(`
             CREATE TABLE IF NOT EXISTS articles (
                 id SERIAL PRIMARY KEY,
@@ -721,7 +700,6 @@ const initDB = async () => {
             );
         `);
 
-        // Article Comments
         await pool.query(`
             CREATE TABLE IF NOT EXISTS article_comments (
                 id SERIAL PRIMARY KEY,
@@ -733,7 +711,6 @@ const initDB = async () => {
             );
         `);
 
-        // Coliseum Threads
         await pool.query(`
             CREATE TABLE IF NOT EXISTS coliseum_threads (
                 id SERIAL PRIMARY KEY,
@@ -744,7 +721,6 @@ const initDB = async () => {
             );
         `);
 
-        // Coliseum Comments
         await pool.query(`
             CREATE TABLE IF NOT EXISTS coliseum_comments (
                 id SERIAL PRIMARY KEY,
@@ -755,7 +731,6 @@ const initDB = async () => {
             );
         `);
 
-        // Chat Messages
         await pool.query(`
             CREATE TABLE IF NOT EXISTS chat_messages (
                 id SERIAL PRIMARY KEY,
@@ -767,7 +742,6 @@ const initDB = async () => {
             );
         `);
 
-        // Wall Posts
         await pool.query(`
             CREATE TABLE IF NOT EXISTS wall_posts (
                 id SERIAL PRIMARY KEY,
@@ -778,7 +752,6 @@ const initDB = async () => {
             );
         `);
 
-        // Wall Comments
         await pool.query(`
             CREATE TABLE IF NOT EXISTS wall_comments (
                 id SERIAL PRIMARY KEY,
@@ -790,7 +763,6 @@ const initDB = async () => {
             );
         `);
 
-        // Media Files
         await pool.query(`
             CREATE TABLE IF NOT EXISTS media_files (
                 id SERIAL PRIMARY KEY,
@@ -803,14 +775,13 @@ const initDB = async () => {
             );
         `);
 
-        // Initial Admin
         await pool.query(`
             INSERT INTO users (username, email, password_hash, role) 
             VALUES ('Admin', 'admin@wom.com', '$2b$10$tH.somERandomHashHereForSecurity', 'Admin') 
             ON CONFLICT (username) DO NOTHING;
         `);
 
-        console.log("[DB] Database initialized successfully. All tables ready.");
+        console.log("[DB] Database initialized successfully.");
     } catch (err) {
         console.error("[DB] Initialization Error:", err);
     }
@@ -821,7 +792,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
     console.log(`==================================`);
     console.log(`SERVER HAS STARTED ON PORT ${PORT}`);
-    console.log(`URL: http://localhost:${PORT}`);
     console.log(`==================================`);
     await initDB();
 });

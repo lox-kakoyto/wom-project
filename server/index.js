@@ -140,7 +140,8 @@ app.get("/auth/me", async (req, res) => {
         
         try {
             const verified = jwt.verify(cleanToken, JWT_SECRET);
-            const user = await pool.query("SELECT * FROM users WHERE id = $1", [verified.id]);
+            const userId = parseInt(verified.id); // Сначала преобразуем строку в число
+            const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]); // Затем используем число в запросе
             
             if (user.rows.length === 0) return res.json(null);
             
@@ -181,7 +182,7 @@ app.get("/users", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const { avatar, banner, bio } = req.body;
+        const userId = parseInt(id);
         
         let query = "UPDATE users SET ";
         let params = [];
@@ -193,7 +194,7 @@ app.put("/users/:id", async (req, res) => {
         
         query = query.slice(0, -2);
         query += ` WHERE id = $${paramCount} RETURNING *`;
-        params.push(id);
+        params.push(userId);
 
         const update = await pool.query(query, params);
         res.json(update.rows[0]);

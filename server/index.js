@@ -1,14 +1,23 @@
 
 console.log("--- Starting WOM Server script... ---");
 
-const express = require("express");
+import express from "express";
+import cors from "cors";
+import pool from "./db.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { OAuth2Client } from 'google-auth-library';
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+dotenv.config();
+
+// ESM fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-const cors = require("cors");
-const pool = require("./db");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const { OAuth2Client } = require('google-auth-library');
-require("dotenv").config();
 
 console.log("Libraries loaded successfully.");
 
@@ -17,8 +26,13 @@ app.use(cors());
 // Increase limit for base64 images
 app.use(express.json({ limit: '50mb' })); 
 
+// Serve Static Files (Vite build output)
+// Changed from '../dist' to '../client/dist' based on logs
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
 const JWT_SECRET = process.env.JWT_SECRET || "wom_secret_key_123";
-const GOOGLE_CLIENT_ID = "831251822210-eljbdqkcp5f9bi0bdaqahpcdjmtve73m.apps.googleusercontent.com";
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "831251822210-eljbdqkcp5f9bi0bdaqahpcdjmtve73m.apps.googleusercontent.com";
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // Logger
@@ -141,8 +155,8 @@ app.get("/auth/me", async (req, res) => {
         
         try {
             const verified = jwt.verify(cleanToken, JWT_SECRET);
-            const userId = parseInt(verified.id); // Сначала преобразуем строку в число
-            const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]); // Затем используем число в запросе
+            const userId = parseInt(verified.id); // Convert to number assuming SERIAL id
+            const user = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
             
             if (user.rows.length === 0) return res.json(null);
             
@@ -183,9 +197,8 @@ app.get("/users", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = parseInt(id); // Преобразуем id из URL в число
+        const userId = parseInt(id); // Ensure integer for DB
         
-        // CRITICAL FIX: We must still extract the body data to update it!
         const { avatar, banner, bio } = req.body; 
         
         let query = "UPDATE users SET ";
@@ -198,7 +211,7 @@ app.put("/users/:id", async (req, res) => {
         
         query = query.slice(0, -2);
         query += ` WHERE id = $${paramCount} RETURNING *`;
-        params.push(userId); // Используем числовой ID
+        params.push(userId); 
 
         const update = await pool.query(query, params);
         res.json(update.rows[0]);
@@ -323,7 +336,6 @@ app.post("/friends/reject", async (req, res) => {
 // --- CHAT ROUTES (OPTIMIZED) ---
 
 // Get Messages for a specific ROOM (Active Chat)
-// This replaces the global dump
 app.get("/chat/:roomId", async (req, res) => {
     try {
         const { roomId } = req.params;
@@ -391,7 +403,7 @@ app.put("/notifications/:id/read", async (req, res) => {
 });
 
 
-// ARTICLES (Heavy Routes - Keep as is but generally these should be paginated too in future)
+// ARTICLES
 app.get("/articles", async (req, res) => {
     try {
         const allArticles = await pool.query("SELECT id, slug, title, content, category, author_id, image_url, tags, created_at FROM articles ORDER BY created_at DESC");
@@ -431,7 +443,6 @@ app.post("/articles", async (req, res) => {
     try {
         const { slug, title, content, category, authorId, imageUrl, tags } = req.body;
         
-        // Check for existing article
         const existing = await pool.query("SELECT id FROM articles WHERE slug = $1", [slug]);
         
         let result;
@@ -639,6 +650,11 @@ app.post("/media", async (req, res) => {
     }
 });
 
+// Catch-all route to serve the React App
+// Also changed from '../dist' to '../client/dist'
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
 
 // DB INITIALIZATION
 const initDB = async () => {

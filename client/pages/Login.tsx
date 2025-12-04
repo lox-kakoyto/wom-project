@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
@@ -6,14 +7,20 @@ import { Logo } from '../components/Logo';
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const { login } = useData();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(''); // Clear previous errors
+    
     const success = await login(email, password);
+    
     if (success) {
        setTimeout(() => navigate('/'), 500);
+    } else {
+       setError("Login failed. Check your credentials or server status (Is Nginx configured?).");
     }
   };
 
@@ -25,6 +32,12 @@ export const Login: React.FC = () => {
         </div>
         <h2 className="text-2xl font-bold text-white text-center mb-6">Welcome Back</h2>
         
+        {error && (
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm font-bold text-center animate-fade-in">
+                {error}
+            </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
            <div>
               <label className="block text-sm text-gray-400 mb-1">Email or Username</label>

@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { Logo } from '../components/Logo';
-import { GoogleLogin } from '@react-oauth/google';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, googleLogin } = useData();
+  const { login } = useData();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,15 +15,6 @@ export const Login: React.FC = () => {
     if (success) {
        setTimeout(() => navigate('/'), 500);
     }
-  };
-
-  const handleGoogleSuccess = async (credentialResponse: any) => {
-      if (credentialResponse.credential) {
-          const success = await googleLogin(credentialResponse.credential);
-          if (success) {
-              setTimeout(() => navigate('/'), 500);
-          }
-      }
   };
 
   return (
@@ -64,18 +54,6 @@ export const Login: React.FC = () => {
               LOG IN
            </button>
         </form>
-
-        <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm mb-2">Or continue with</p>
-            <div className="flex justify-center">
-                <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => alert("Google Login Failed")}
-                    theme="filled_black"
-                    shape="circle"
-                />
-            </div>
-        </div>
 
         <p className="mt-6 text-center text-gray-400 text-sm">
             Don't have an account? <Link to="/register" className="text-wom-accent font-bold hover:underline">Register</Link>

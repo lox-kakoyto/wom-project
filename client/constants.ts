@@ -7,12 +7,11 @@ const env = (import.meta as any)?.env;
 // We consider it production if:
 // 1. Vite says it is PROD.
 // 2. OR The hostname is NOT localhost/127.0.0.1 (meaning it's deployed on a server like 89.168.99.65).
-// This prevents the "net::ERR_CONNECTION_REFUSED" error where the deployed frontend tries to hit the user's localhost.
 const isProduction = (env?.PROD) || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 
-// In Production (Nginx proxy), use relative '/api' path.
-// In Development (Localhost), point to port 5000.
-export const API_URL = isProduction ? '/api' : 'http://localhost:5000';
+// FIX: In Production (Express serving static files), use relative path "" (empty string).
+// This ensures requests go to /auth/login instead of /api/auth/login, matching the server routes.
+export const API_URL = isProduction ? '' : 'http://localhost:5000';
 
 export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; // Placeholder silhouette
 

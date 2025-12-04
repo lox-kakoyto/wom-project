@@ -129,13 +129,13 @@ const buildCommentTree = (flatComments: any[]): Comment[] => {
     const commentMap: Record<string, Comment> = {};
     const roots: Comment[] = [];
 
-    const comments = flatComments.map(c => ({...c, replies: []}));
-
-    comments.forEach(c => {
-        commentMap[c.id] = c;
+    // Init map
+    flatComments.forEach(c => {
+        commentMap[c.id] = { ...c, replies: [] };
     });
 
-    comments.forEach(c => {
+    // Build tree
+    flatComments.forEach(c => {
         if (c.parentId && commentMap[c.parentId]) {
             commentMap[c.parentId].replies.push(commentMap[c.id]);
         } else {
@@ -168,7 +168,7 @@ interface DataContextType {
   googleLogin: (token: string) => Promise<boolean>;
   register: (username: string, email: string, pass: string) => Promise<boolean>;
   logout: () => void;
-  updateUserProfile: (id: string, data: { avatar?: string, banner?: string, bio?: string }) => Promise<void>;
+  updateUserProfile: (id: string, data: { avatar?: string, banner?: string, bio?: string }) => Promise<boolean>;
   
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
@@ -456,15 +456,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setActiveConversationId(null);
   };
 
-  const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }) => {
-      setCurrentUser(prev => ({ ...prev, ...data }));
+  const updateUserProfile = async (id: string, data: { avatar?: string, banner?: string, bio?: string }): Promise<boolean> => {
       try {
-          await fetch(`${API_URL}/users/${id}`, {
+          const res = await fetch(`${API_URL}/users/${id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(data)
           });
-      } catch (e) { console.error(e); }
+          if (res.ok) {
+             setCurrentUser(prev => ({ ...prev, ...data }));
+             setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+             return true;
+          }
+          return false;
+      } catch (e) {
+          console.error(e);
+          return false;
+      }
   };
 
   const toggleWatch = async (slug: string) => {

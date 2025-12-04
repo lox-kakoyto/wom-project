@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, Edit3, Camera, Save, X, Reply } from 'lucide-react';
+import { Calendar, Edit3, Camera, Save, X, Reply, Loader } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { WallPost, Comment } from '../types';
 import { DEFAULT_AVATAR } from '../constants';
@@ -104,6 +104,8 @@ export const Profile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editBio, setEditBio] = useState('');
   
+  const [isUploading, setIsUploading] = useState(false);
+
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
@@ -150,11 +152,19 @@ export const Profile: React.FC = () => {
       const file = e.target.files?.[0];
       if (file) {
           if (file.size > 8 * 1024 * 1024) return alert("Max Avatar size is 8MB");
+          
+          setIsUploading(true);
           const reader = new FileReader();
-          reader.onload = (ev) => {
+          reader.onload = async (ev) => {
               if (ev.target?.result) {
-                  updateUserProfile(currentUser.id, { avatar: ev.target.result as string });
+                  const success = await updateUserProfile(currentUser.id, { avatar: ev.target.result as string });
+                  if (!success) alert("Failed to save avatar. Please try again.");
+                  setIsUploading(false);
               }
+          };
+          reader.onerror = () => {
+              alert("Error reading file");
+              setIsUploading(false);
           };
           reader.readAsDataURL(file);
       }
@@ -164,19 +174,33 @@ export const Profile: React.FC = () => {
       const file = e.target.files?.[0];
       if (file) {
           if (file.size > 10 * 1024 * 1024) return alert("Max Banner size is 10MB");
+          
+          setIsUploading(true);
           const reader = new FileReader();
-          reader.onload = (ev) => {
+          reader.onload = async (ev) => {
               if (ev.target?.result) {
-                  updateUserProfile(currentUser.id, { banner: ev.target.result as string });
+                  const success = await updateUserProfile(currentUser.id, { banner: ev.target.result as string });
+                  if (!success) alert("Failed to save banner. Please try again.");
+                  setIsUploading(false);
               }
+          };
+          reader.onerror = () => {
+              alert("Error reading file");
+              setIsUploading(false);
           };
           reader.readAsDataURL(file);
       }
   };
 
-  const saveBio = () => {
-      updateUserProfile(currentUser.id, { bio: editBio });
-      setIsEditing(false);
+  const saveBio = async () => {
+      setIsUploading(true);
+      const success = await updateUserProfile(currentUser.id, { bio: editBio });
+      setIsUploading(false);
+      if (success) {
+        setIsEditing(false);
+      } else {
+        alert("Failed to save bio.");
+      }
   };
 
   const userWallPosts = wallPosts.filter(p => p.targetUserId === profileUser.id);
@@ -185,7 +209,18 @@ export const Profile: React.FC = () => {
   const displayAvatar = profileUser.avatar || DEFAULT_AVATAR;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in relative">
+      
+      {/* Uploading Overlay */}
+      {isUploading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-wom-panel border border-wom-primary rounded-xl p-6 flex flex-col items-center gap-4 shadow-2xl">
+                <Loader size={32} className="text-wom-primary animate-spin" />
+                <span className="text-white font-bold">Saving changes...</span>
+            </div>
+        </div>
+      )}
+
       {/* Profile Header Container */}
       <div className="relative mb-24">
           {/* Banner */}

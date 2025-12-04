@@ -1,10 +1,11 @@
-
 import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 
 // Detect environment: 
-// In Production (when built), the backend serves the frontend, so we use a relative path ("").
-// In Development, we point to localhost:5000 (default server port).
-export const API_URL = (import.meta as any).env.PROD ? '' : 'http://localhost:5000';
+// In Production, we use the '/api' prefix.
+// Nginx is configured to catch requests to '/api/', strip the prefix, and proxy them to localhost:5000.
+// In Development, we point directly to localhost:5000.
+const env = (import.meta as any)?.env;
+export const API_URL = (env && env.PROD) ? '/api' : 'http://localhost:5000';
 
 export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; // Placeholder silhouette
 

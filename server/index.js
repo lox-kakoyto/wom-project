@@ -1,3 +1,4 @@
+
 console.log("--- Starting WOM Server script... ---");
 
 const express = require("express");
@@ -182,7 +183,10 @@ app.get("/users", async (req, res) => {
 app.put("/users/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        const userId = parseInt(id);
+        const userId = parseInt(id); // Преобразуем id из URL в число
+        
+        // CRITICAL FIX: We must still extract the body data to update it!
+        const { avatar, banner, bio } = req.body; 
         
         let query = "UPDATE users SET ";
         let params = [];
@@ -194,7 +198,7 @@ app.put("/users/:id", async (req, res) => {
         
         query = query.slice(0, -2);
         query += ` WHERE id = $${paramCount} RETURNING *`;
-        params.push(userId);
+        params.push(userId); // Используем числовой ID
 
         const update = await pool.query(query, params);
         res.json(update.rows[0]);

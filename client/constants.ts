@@ -3,19 +3,13 @@ import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 // Detect environment: 
 const env = (import.meta as any)?.env;
 
-// We consider it production if:
-// 1. Vite says it is PROD.
-// 2. OR The hostname is NOT localhost/127.0.0.1.
+// Force port 5000 in production to bypass Nginx blocking POST requests on static paths
 const isProduction = (env?.PROD) || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 
-// CRITICAL FIX:
-// If we are in production (on the server), Nginx often blocks POST requests to the root path (Error 405)
-// if it thinks we are requesting a static file.
-// To bypass this without complex Nginx config, we force the frontend to talk directly to the Node server on port 5000.
-// This assumes port 5000 is open in the firewall.
 let apiUrl = 'http://localhost:5000';
 if (isProduction && typeof window !== 'undefined') {
     // Construct the URL using the current IP/Domain but with port 5000
+    // This connects directly to Node.js
     apiUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
 }
 

@@ -1,4 +1,3 @@
-
 import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 
 // Detect environment: 
@@ -6,14 +5,23 @@ const env = (import.meta as any)?.env;
 
 // We consider it production if:
 // 1. Vite says it is PROD.
-// 2. OR The hostname is NOT localhost/127.0.0.1 (meaning it's deployed on a server like 89.168.99.65).
+// 2. OR The hostname is NOT localhost/127.0.0.1.
 const isProduction = (env?.PROD) || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 
-// FIX: In Production (Express serving static files), use relative path "" (empty string).
-// This ensures requests go to /auth/login instead of /api/auth/login, matching the server routes.
-export const API_URL = isProduction ? '' : 'http://localhost:5000';
+// CRITICAL FIX:
+// If we are in production (on the server), Nginx often blocks POST requests to the root path (Error 405)
+// if it thinks we are requesting a static file.
+// To bypass this without complex Nginx config, we force the frontend to talk directly to the Node server on port 5000.
+// This assumes port 5000 is open in the firewall.
+let apiUrl = 'http://localhost:5000';
+if (isProduction && typeof window !== 'undefined') {
+    // Construct the URL using the current IP/Domain but with port 5000
+    apiUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+}
 
-export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; // Placeholder silhouette
+export const API_URL = apiUrl;
+
+export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; 
 
 export const CURRENT_USER: User = {
   id: 'u1',

@@ -1,13 +1,20 @@
-const Pool = require("pg").Pool;
-require("dotenv").config();
+import pg from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Safe destructuring for pg regardless of import type
+const { Pool } = pg;
 
 const connectionString = process.env.DATABASE_URL;
 
-
-const pool = new Pool(
+export const pool = new Pool(
   connectionString
     ? {
         connectionString,
+        ssl: {
+          rejectUnauthorized: false
+        }
       }
     : {
         user: process.env.DB_USER,
@@ -17,6 +24,4 @@ const pool = new Pool(
         database: process.env.DB_NAME,
       }
 );
-
-module.exports = pool;
 

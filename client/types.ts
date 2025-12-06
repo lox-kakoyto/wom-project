@@ -1,3 +1,4 @@
+
 export enum UserRole {
   USER = 'User',
   MODERATOR = 'Moderator',
@@ -7,10 +8,10 @@ export enum UserRole {
 export interface User {
   id: string;
   username: string;
-  email?: string; 
+  email?: string; // Optional for security on frontend
   role: UserRole;
   avatar: string;
-  banner?: string; 
+  banner?: string; // New field
   bio?: string;
   joinDate: string;
   watchlist?: string[]; 
@@ -39,7 +40,7 @@ export interface Comment {
   authorId: string;
   content: string;
   timestamp: string;
-  parentId?: string | null; 
+  parentId?: string | null; // For DB mapping
   replies: Comment[];
 }
 
@@ -73,6 +74,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   roomId: string; 
+  recipientId?: string; 
   type: 'text' | 'image' | 'system';
 }
 
@@ -92,7 +94,7 @@ export interface WallPost {
   targetUserId: string;
   content: string;
   timestamp: string;
-  comments: Comment[]; 
+  comments: Comment[]; // Added support for replies
 }
 
 export interface WikiTemplate {

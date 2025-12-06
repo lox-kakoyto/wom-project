@@ -14,6 +14,8 @@ import { MediaGallery } from './pages/MediaGallery';
 import { TemplateGuide } from './pages/TemplateGuide';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { UserSearch } from './pages/UserSearch';
+import { Friends } from './pages/Friend';
 import { Bell, Search, LogIn } from 'lucide-react';
 import { useData } from './contexts/DataContext';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -98,19 +100,32 @@ const AnimatedRoutes: React.FC = () => {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageWrapper><Dashboard /></PageWrapper>} />
+        
+        {/* Auth */}
         <Route path="/login" element={<PageWrapper><Login /></PageWrapper>} />
         <Route path="/register" element={<PageWrapper><Register /></PageWrapper>} />
+        
+        {/* Social */}
+        <Route path="/users" element={<PageWrapper><UserSearch /></PageWrapper>} />
+        <Route path="/friends" element={<PageWrapper><Friends /></PageWrapper>} />
+        <Route path="/profile/:username" element={<PageWrapper><Profile /></PageWrapper>} />
+        
+        {/* Wiki & Tools */}
         <Route path="/wiki" element={<PageWrapper><Wiki /></PageWrapper>} />
         <Route path="/wiki/:slug" element={<PageWrapper><Wiki /></PageWrapper>} />
         <Route path="/editor" element={<PageWrapper><Editor /></PageWrapper>} />
         <Route path="/editor/:slug" element={<PageWrapper><Editor /></PageWrapper>} />
-        <Route path="/coliseum" element={<PageWrapper><Coliseum /></PageWrapper>} />
-        <Route path="/chat" element={<PageWrapper><Chat /></PageWrapper>} />
-        <Route path="/messages" element={<PageWrapper><Chat /></PageWrapper>} /> 
-        <Route path="/profile/:username" element={<PageWrapper><Profile /></PageWrapper>} />
         <Route path="/media" element={<PageWrapper><MediaGallery /></PageWrapper>} />
         <Route path="/templates" element={<PageWrapper><TemplateGuide /></PageWrapper>} />
+        
+        {/* Features */}
+        <Route path="/coliseum" element={<PageWrapper><Coliseum /></PageWrapper>} />
+        <Route path="/messages" element={<PageWrapper><Chat /></PageWrapper>} /> 
+        <Route path="/chat" element={<PageWrapper><Chat /></PageWrapper>} />
+        
         <Route path="/admin" element={<PageWrapper><div className="p-10 text-center text-xl text-red-500 font-display uppercase tracking-widest">Restricted Area: Level 5 Access Required</div></PageWrapper>} />
+        
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AnimatePresence>
@@ -160,7 +175,6 @@ const AppContent: React.FC = () => {
                        </motion.button>
                        <div className="flex items-center gap-3">
                            <Link to={`/profile/${currentUser.username}`}>
-                                {/* Only show avatar circle if avatar exists */}
                                 {currentUser.avatar ? (
                                     <div className="w-8 h-8 rounded-full overflow-hidden border border-wom-primary cursor-pointer hover:scale-105 transition-transform">
                                         <img src={currentUser.avatar} alt="User" className="w-full h-full object-cover"/>

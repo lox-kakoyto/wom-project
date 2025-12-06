@@ -20,10 +20,14 @@ export const Friends: React.FC = () => {
       setSearchTerm('');
   };
 
-  const usersToSearch = users.filter(u => 
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeFriends = Array.isArray(friends) ? friends : [];
+  const safeRequests = Array.isArray(friendRequests) ? friendRequests : [];
+
+  const usersToSearch = safeUsers.filter(u => 
       u.id !== currentUser.id && 
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) && 
-      !friends.find(f => f.friendId === u.id)
+      (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) && 
+      !safeFriends.find(f => f.friendId === u.id)
   );
 
   return (
@@ -33,14 +37,14 @@ export const Friends: React.FC = () => {
         </h1>
 
         {/* Incoming Requests */}
-        {friendRequests.length > 0 && (
+        {safeRequests.length > 0 && (
             <div className="bg-wom-panel border border-wom-accent/50 rounded-xl p-6">
                 <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-wom-accent animate-pulse"></span>
                     Incoming Requests
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {friendRequests.map(req => (
+                    {safeRequests.map(req => (
                         <div key={req.id} className="bg-black/30 p-4 rounded-lg flex items-center justify-between border border-white/5">
                             <div className="flex items-center gap-3">
                                 <img src={req.sender?.avatar || 'https://via.placeholder.com/50'} className="w-10 h-10 rounded-full object-cover" alt="User" />
@@ -59,15 +63,15 @@ export const Friends: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Friends List */}
             <div className="lg:col-span-2 space-y-4">
-                <h2 className="text-xl font-bold text-gray-300">My Friends ({friends.length})</h2>
+                <h2 className="text-xl font-bold text-gray-300">My Friends ({safeFriends.length})</h2>
                 <div className="bg-wom-panel border border-white/10 rounded-xl overflow-hidden min-h-[300px]">
-                    {friends.length === 0 ? (
+                    {safeFriends.length === 0 ? (
                         <div className="p-10 text-center text-gray-500">
                             You haven't added any friends yet.
                         </div>
                     ) : (
                         <div className="divide-y divide-white/5">
-                            {friends.map(f => (
+                            {safeFriends.map(f => (
                                 <div key={f.friendId} className="p-4 hover:bg-white/5 flex items-center justify-between transition-colors group">
                                     <Link to={`/profile/${f.friend.username}`} className="flex items-center gap-4">
                                         <div className="relative">

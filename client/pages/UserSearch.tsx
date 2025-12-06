@@ -10,11 +10,12 @@ export const UserSearch: React.FC = () => {
   const { users } = useData();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Show all users if search term is empty, or filter if present
-  // Also filter out 'guest' template user
-  const filteredUsers = users.filter(u => 
-    u.id !== 'guest' &&
-    (searchTerm === '' || u.username.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Fail-safe filtering
+  const safeUsers = Array.isArray(users) ? users : [];
+  
+  const filteredUsers = safeUsers.filter(u => 
+    u && u.id !== 'guest' &&
+    (searchTerm === '' || (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

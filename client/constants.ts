@@ -1,19 +1,21 @@
+
 import { User, UserRole, Article, ArticleCategory, ChatMessage } from './types';
 
 // Detect environment: 
 const env = (import.meta as any)?.env;
 
-// Force port 5000 in production to bypass Nginx blocking POST requests on static paths
+// Force port 5000 in production to bypass Nginx blocking POST requests on static paths (Error 405)
 const isProduction = (env?.PROD) || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
 
 let apiUrl = 'http://localhost:5000';
 if (isProduction && typeof window !== 'undefined') {
-    // Construct the URL using the current IP/Domain but with port 5000
-    // This connects directly to Node.js
     apiUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
 }
 
 export const API_URL = apiUrl;
+
+// Google Client ID
+export const GOOGLE_CLIENT_ID = "831251822210-eljbdqkcp5f9bi0bdaqahpcdjmtve73m.apps.googleusercontent.com";
 
 export const DEFAULT_AVATAR = "https://i.ibb.co/hR5d56x/mystery-user.png"; 
 

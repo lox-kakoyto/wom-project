@@ -10,7 +10,7 @@ export const UserSearch: React.FC = () => {
   const { users } = useData();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Fail-safe filtering
+  // Fail-safe filtering to prevent crashes if users is undefined/null
   const safeUsers = Array.isArray(users) ? users : [];
   
   const filteredUsers = safeUsers.filter(u => 
